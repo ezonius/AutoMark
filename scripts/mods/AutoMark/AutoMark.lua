@@ -2,9 +2,14 @@ local mod                    = get_mod("AutoMark")
 local Health                 = require("scripts/utilities/health")
 local breeds                 = require("scripts/settings/breed/breeds")
 local Breed                  = require("scripts/utilities/breed")
+
 -- Global Cache
 local CLASS                  = CLASS
 local table_clear            = table.clear
+local pairs                  = pairs
+local next                   = next
+local type                   = type
+local tostring               = tostring
 
 -- Smart Tag Names
 local TAG_NAMES              = {
@@ -13,6 +18,12 @@ local TAG_NAMES              = {
     COMPANION_TAG = "enemy_companion_target",
 }
 mod.TAG_NAMES                = TAG_NAMES
+
+local TAG_LIST               = {
+    TAG_NAMES.COMPANION_TAG,
+    TAG_NAMES.VETERAN_TAG,
+    TAG_NAMES.ENEMY_TAG,
+}
 
 -- Mod Settings
 local mod_settings           = {
@@ -125,12 +136,19 @@ local visibility_check_frame = {}
 mod.visibility_cache         = visibility_cache
 mod.visibility_check_frame   = visibility_check_frame
 
+-- Unit Metadata Cache
+local unit_metadata_cache       = {}
+local unit_metadata_cache_frame = {}
+mod.unit_metadata_cache         = unit_metadata_cache
+mod.unit_metadata_cache_frame   = unit_metadata_cache_frame
+
 -- Reset all params
 local function reset_context()
     -- Reset Mark Params
     mark_context.auto_mark_interval = 0
     table_clear(mark_context.execution_order_units)
-    for _, tag_name in pairs(TAG_NAMES) do
+    for i = 1, #TAG_LIST do
+        local tag_name = TAG_LIST[i]
         local tag_context = mark_context[tag_name]
         tag_context.tag = nil
         tag_context.cooldown = 0
@@ -144,6 +162,9 @@ local function reset_context()
     tag_context.canceled_unit = nil
     table_clear(visibility_cache)
     table_clear(visibility_check_frame)
+    table_clear(unit_metadata_cache)
+    table_clear(unit_metadata_cache_frame)
+    mod:reset_targeting_cache()
 end
 
 -- Load Other Files
@@ -275,6 +296,11 @@ local function auto_mark_by_tag(tag_name)
         and tag_name == TAG_NAMES.VETERAN_TAG
         and mod_settings.focus_target_overwrite
 
+    -- Early escape: if no scanning conditions are met, skip expensive targeting
+    if not is_cooldown_ready and not is_priority_switch and not is_execution_order_priority and not is_focus_target_overwrite then
+        return false
+    end
+
     local target_unit, target_tag
     if is_cooldown_ready then
         target_unit, target_tag = mod:find_target_unit_custom("auto", class_settings.min_range, class_settings.max_range,
@@ -301,46 +327,51 @@ end
 
 -- Auto-Mark
 local function auto_mark(dt)
-    -- calculate interval
-    if mark_context.auto_mark_interval > 0 then
-        mark_context.auto_mark_interval = mark_context.auto_mark_interval - dt
-    end
-    -- calculate cooldown and delay for all tags
-    for _, tag_name in pairs(TAG_NAMES) do
-        local tag_context = mark_context[tag_name]
-        if tag_context.delay > 0 then
-            tag_context.delay = tag_context.delay - dt
-        end
-        if tag_context.cooldown > 0 then
-            tag_context.cooldown = tag_context.cooldown - dt
-        end
-    end
     -- skip if auto mark is disabled
     if not mod_settings.toggle_mod then
         return
     end
+
+    -- calculate interval
+    local auto_mark_interval = mark_context.auto_mark_interval
+    if auto_mark_interval > 0 then
+        mark_context.auto_mark_interval = auto_mark_interval - dt
+    end
+
+    -- calculate cooldown and delay for all tags
+    for i = 1, #TAG_LIST do
+        local tag_name = TAG_LIST[i]
+        local tag_context = mark_context[tag_name]
+        local delay = tag_context.delay
+        if delay > 0 then
+            tag_context.delay = delay - dt
+        end
+        local cooldown = tag_context.cooldown
+        if cooldown > 0 then
+            tag_context.cooldown = cooldown - dt
+        end
+    end
+
     -- pause auto mark for a period of time after it is executed.
     if mark_context.auto_mark_interval > 0 then
         return
     end
-    for _, tag_name in pairs(TAG_NAMES) do
-        local tag_context = mark_context[tag_name]
+
+    for i = 1, #TAG_LIST do
+        local tag_context = mark_context[TAG_LIST[i]]
         if tag_context.delay > 0 then
             return
         end
     end
 
     -- three kinds of tag to mark
-    if auto_mark_by_tag(TAG_NAMES.COMPANION_TAG) then
-        return
-    end
+    local marked = auto_mark_by_tag(TAG_NAMES.COMPANION_TAG)
+        or auto_mark_by_tag(TAG_NAMES.VETERAN_TAG)
+        or auto_mark_by_tag(TAG_NAMES.ENEMY_TAG)
 
-    if auto_mark_by_tag(TAG_NAMES.VETERAN_TAG) then
-        return
-    end
-
-    if auto_mark_by_tag(TAG_NAMES.ENEMY_TAG) then
-        return
+    if not marked then
+        -- Set a small interval even if no target was found to avoid scanning every frame
+        mark_context.auto_mark_interval = 0.1
     end
 end
 
@@ -380,12 +411,18 @@ local function cancel_companion_mark_on_condition(t)
     end
 end
 
-local function clean_visibility_cache(fixed_frame)
-    if fixed_frame % 20 == 0 then
+local function clean_caches(fixed_frame)
+    if fixed_frame % 100 == 0 then
         for cached_unit, check_frame in pairs(visibility_check_frame) do
-            if fixed_frame - check_frame > 5 then
+            if fixed_frame - check_frame > 10 then
                 visibility_cache[cached_unit] = nil
                 visibility_check_frame[cached_unit] = nil
+            end
+        end
+        for cached_unit, check_frame in pairs(unit_metadata_cache_frame) do
+            if fixed_frame - check_frame > 60 then
+                unit_metadata_cache[cached_unit] = nil
+                unit_metadata_cache_frame[cached_unit] = nil
             end
         end
     end
@@ -395,7 +432,7 @@ end
 mod:hook_safe(CLASS.PlayerUnitSmartTargetingExtension, "fixed_update",
     function(self, unit, dt, t, fixed_frame)
         if context.game_mode_valid and self._player.viewport_name == "player1" then
-            clean_visibility_cache(fixed_frame)
+            clean_caches(fixed_frame)
             cancel_companion_mark_on_condition(t)
             auto_mark(dt)
         end
