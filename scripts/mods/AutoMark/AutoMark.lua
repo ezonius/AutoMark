@@ -74,10 +74,10 @@ for breed_name, breed_data in pairs(breeds) do
         end
     end
 end
-mod.DEFAULT_CLASS_SETTINGS   = DEFAULT_CLASS_SETTINGS
+mod.DEFAULT_CLASS_SETTINGS      = DEFAULT_CLASS_SETTINGS
 
 -- Context
-local context                = {
+local context                   = {
     mod_enabled                 = false,
     game_mode_valid             = false,
     player                      = nil,
@@ -93,14 +93,14 @@ local context                = {
     outline_system              = nil,
     companion_command_tap       = "double"
 }
-mod.context                  = context
+mod.context                     = context
 
 -- Auto Mark Settings
-local auto_mark_settings     = mod:get("auto_mark_settings") or {}
-mod.auto_mark_settings       = auto_mark_settings
+local auto_mark_settings        = mod:get("auto_mark_settings") or {}
+mod.auto_mark_settings          = auto_mark_settings
 
 -- Mark States
-local mark_context           = {
+local mark_context              = {
     auto_mark_interval        = 0,
     execution_order_units     = {},
     [TAG_NAMES.ENEMY_TAG]     = {
@@ -128,19 +128,23 @@ local mark_context           = {
         canceled_unit     = nil,
     },
 }
-mod.mark_context             = mark_context
+mod.mark_context                = mark_context
 
 -- Enemy Visbility Check
-local visibility_cache       = {}
-local visibility_check_frame = {}
-mod.visibility_cache         = visibility_cache
-mod.visibility_check_frame   = visibility_check_frame
+local visibility_cache          = {}
+local visibility_check_frame    = {}
+mod.visibility_cache            = visibility_cache
+mod.visibility_check_frame      = visibility_check_frame
 
 -- Unit Metadata Cache
 local unit_metadata_cache       = {}
 local unit_metadata_cache_frame = {}
 mod.unit_metadata_cache         = unit_metadata_cache
 mod.unit_metadata_cache_frame   = unit_metadata_cache_frame
+
+-- Reusable tables for cache cleanup (avoids GC pressure)
+local _units_to_remove_vis      = {}
+local _units_to_remove_meta     = {}
 
 -- Reset all params
 local function reset_context()
@@ -275,10 +279,17 @@ local function auto_mark_by_tag(tag_name)
     local tag_context = mark_context[tag_name]
     local class_settings = mod:get_class_settings(tag_name)
     local smart_tag_system = context.smart_tag_system
-    if not class_settings.toggle_class
-        or (tag_context.is_manual and not class_settings.override_manual)
+
+    -- Early exit checks combined
+    if not class_settings
+        or not class_settings.toggle_class
         or not smart_tag_system
     then
+        return false
+    end
+
+    -- Check manual override separately (more readable)
+    if tag_context.is_manual and not class_settings.override_manual then
         return false
     end
 
@@ -371,7 +382,7 @@ local function auto_mark(dt)
 
     if not marked then
         -- Set a small interval even if no target was found to avoid scanning every frame
-        mark_context.auto_mark_interval = 0.1
+        mark_context.auto_mark_interval = 0.15
     end
 end
 
@@ -413,18 +424,36 @@ end
 
 local function clean_caches(fixed_frame)
     if fixed_frame % 100 == 0 then
-        for cached_unit, check_frame in pairs(visibility_check_frame) do
+        -- Collect units to remove first (avoids modifying table during iteration)
+        local remove_count_vis = 0
+        local remove_count_meta = 0
+
+        for cached_unit, check_frame in next, visibility_check_frame do
             if fixed_frame - check_frame > 10 then
-                visibility_cache[cached_unit] = nil
-                visibility_check_frame[cached_unit] = nil
+                remove_count_vis = remove_count_vis + 1
+                _units_to_remove_vis[remove_count_vis] = cached_unit
             end
         end
-        for cached_unit, check_frame in pairs(unit_metadata_cache_frame) do
+        for i = 1, remove_count_vis do
+            local unit = _units_to_remove_vis[i]
+            visibility_cache[unit] = nil
+            visibility_check_frame[unit] = nil
+        end
+
+        for cached_unit, check_frame in next, unit_metadata_cache_frame do
             if fixed_frame - check_frame > 60 then
-                unit_metadata_cache[cached_unit] = nil
-                unit_metadata_cache_frame[cached_unit] = nil
+                remove_count_meta = remove_count_meta + 1
+                _units_to_remove_meta[remove_count_meta] = cached_unit
             end
         end
+        for i = 1, remove_count_meta do
+            local unit = _units_to_remove_meta[i]
+            unit_metadata_cache[unit] = nil
+            unit_metadata_cache_frame[unit] = nil
+        end
+
+        table_clear(_units_to_remove_vis)
+        table_clear(_units_to_remove_meta)
     end
 end
 

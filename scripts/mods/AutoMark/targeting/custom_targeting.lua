@@ -34,6 +34,7 @@ local ScriptUnit_extension      = ScriptUnit.extension
 local math_abs                  = math.abs
 local math_max                  = math.max
 local math_sqrt                 = math.sqrt
+local math_huge                 = math.huge
 local Vector3_dot               = Vector3.dot
 local Vector3_normalize         = Vector3.normalize
 local Vector3_length            = Vector3.length
@@ -78,26 +79,17 @@ local function is_breed_valid(breed_data, class_settings)
         return false
     end
 
+    local tags = breed_data.tags
     -- toggle enemy by type
-    if breed_data.tags.elite then
-        if not class_settings.toggle_elite then
-            return false
-        end
-    elseif breed_data.tags.special then
-        if not class_settings.toggle_special then
-            return false
-        end
+    if tags.elite then
+        return class_settings.toggle_elite
+    elseif tags.special then
+        return class_settings.toggle_special
     elseif breed_data.is_boss then
-        if not class_settings.toggle_boss then
-            return false
-        end
+        return class_settings.toggle_boss
     else
-        if not class_settings.toggle_other then
-            return false
-        end
+        return class_settings.toggle_other
     end
-
-    return true
 end
 
 -- Check if Tagged Target Unit can be Marked with Current Tag
@@ -274,10 +266,10 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
     local execution_order_units = mark_context.execution_order_units
     local best_unit = nil
     local best_unit_tag = nil
-    local best_unit_priority = -math.huge
+    local best_unit_priority = -math_huge
     local best_unit_marked_by_execution_order = false
-    local best_unit_dot = -math.huge
-    local best_unit_distance = math.huge
+    local best_unit_dot = -math_huge
+    local best_unit_distance = math_huge
     -- init best unit for switch logic
     local marked_unit = marked_tag and marked_tag._target_unit
     if marked_unit and Unit_alive(marked_unit) then
@@ -346,7 +338,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
 
         -- Early priority check for auto mode to skip expensive math
         if type == "auto" then
-            local hit_unit_marked_by_execution_order = not not execution_order_units[hit_unit]
+            local hit_unit_marked_by_execution_order = execution_order_units[hit_unit] ~= nil
             if is_execution_order_priority then
                 if hit_unit_marked_by_execution_order == best_unit_marked_by_execution_order then
                     if hit_unit_priority <= best_unit_priority then
@@ -360,6 +352,9 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
                     goto continue_loop
                 end
             end
+            
+            -- Store for later use instead of recalculating
+            metadata.hit_unit_marked_by_execution_order = hit_unit_marked_by_execution_order
         end
 
         -- Frame-specific unit data
@@ -415,9 +410,8 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
             best_unit = hit_unit
             best_unit_tag = hit_unit_tag
             best_unit_priority = hit_unit_priority
-            -- we already calculated this above for auto mode
-            local hit_unit_marked_by_execution_order = not not execution_order_units[hit_unit]
-            best_unit_marked_by_execution_order = hit_unit_marked_by_execution_order
+            -- Use cached value instead of recalculating
+            best_unit_marked_by_execution_order = metadata.hit_unit_marked_by_execution_order
         elseif type == "focus_target_melee" then
             if best_unit and best_unit_distance <= 3.5 and distance > 3.5 then
                 goto continue_loop
