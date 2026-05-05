@@ -40,10 +40,17 @@ local function create_breed_priority_dropdown(breed_name, default_value)
         type = "dropdown",
         default_value = default_value,
         options = {
-            { text = "priority_off",    value = 0 },
-            { text = "priority_low",    value = 1 },
-            { text = "priority_medium", value = 2 },
-            { text = "priority_high",   value = 3 },
+            { text = "priority_off", value = 0 },
+            { text = "priority_1",   value = 1 },
+            { text = "priority_2",   value = 2 },
+            { text = "priority_3",   value = 3 },
+            { text = "priority_4",   value = 4 },
+            { text = "priority_5",   value = 5 },
+            { text = "priority_6",   value = 6 },
+            { text = "priority_7",   value = 7 },
+            { text = "priority_8",   value = 8 },
+            { text = "priority_9",   value = 9 },
+            { text = "priority_10",  value = 10 },
         }
     }
     return breed_priority_setting

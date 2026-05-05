@@ -259,17 +259,45 @@ local localization = {
         en = "Off",
         ["zh-cn"] = "关闭",
     },
-    priority_low = {
-        en = "Priority Low",
-        ["zh-cn"] = "低优先级",
+    priority_1 = {
+        en = "Priority 1 (Lowest)",
+        ["zh-cn"] = "优先级 1 (最低)",
     },
-    priority_medium = {
-        en = "Priority Medium",
-        ["zh-cn"] = "中优先级",
+    priority_2 = {
+        en = "Priority 2",
+        ["zh-cn"] = "优先级 2",
     },
-    priority_high = {
-        en = "Priority High",
-        ["zh-cn"] = "高优先级",
+    priority_3 = {
+        en = "Priority 3",
+        ["zh-cn"] = "优先级 3",
+    },
+    priority_4 = {
+        en = "Priority 4",
+        ["zh-cn"] = "优先级 4",
+    },
+    priority_5 = {
+        en = "Priority 5",
+        ["zh-cn"] = "优先级 5",
+    },
+    priority_6 = {
+        en = "Priority 6",
+        ["zh-cn"] = "优先级 6",
+    },
+    priority_7 = {
+        en = "Priority 7",
+        ["zh-cn"] = "优先级 7",
+    },
+    priority_8 = {
+        en = "Priority 8",
+        ["zh-cn"] = "优先级 8",
+    },
+    priority_9 = {
+        en = "Priority 9",
+        ["zh-cn"] = "优先级 9",
+    },
+    priority_10 = {
+        en = "Priority 10 (Highest)",
+        ["zh-cn"] = "优先级 10 (最高)",
     },
     adamant_companion = {
         en = "Arbitrator Companion",
