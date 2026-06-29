@@ -100,22 +100,6 @@ local localization = {
         en = "How often to check if the servo-skull is currently hacking.",
         ["zh-cn"] = "检查伺服颅骨当前是否正在黑入的频率。",
     },
-    auto_hack_scan_interval = {
-        en = "Auto-Hack Scan Interval",
-        ["zh-cn"] = "自动黑入扫描间隔",
-    },
-    auto_hack_scan_interval_description = {
-        en = "Frequency of scans for hackable objectives when no objective is found.",
-        ["zh-cn"] = "未找到黑入目标时，扫描可黑入目标的频率。",
-    },
-    auto_hack_success_interval = {
-        en = "Auto-Hack Success Interval",
-        ["zh-cn"] = "自动黑入成功间隔",
-    },
-    auto_hack_success_interval_description = {
-        en = "The minimum time before another hack can be attempted after a successful one.",
-        ["zh-cn"] = "成功黑入后，再次尝试黑入之前的最小时间。",
-    },
     noospheric_command_lead_time = {
         en = "Noospheric Command Re-mark Lead Time",
         ["zh-cn"] = "星语指令重新标记提前时间",
@@ -239,18 +223,6 @@ local localization = {
     hack_mark_keybind_description = {
         en = "Dedicated key for Sending the Servo-Skull to hack the minigame.",
         ["zh-cn"] = "用于指派伺服颅骨黑入数据查询小游戏的专用按键。",
-    },
-    auto_hack = {
-        en = "Auto Data Interrogation",
-        ["zh-cn"] = "自动数据查询",
-    },
-    auto_hack_description = {
-        en = "Automatically sends your Servo-Skull to hack the minigame when you aim at a hackable objective",
-        ["zh-cn"] = "当你瞄准一个数据查询小游戏时，自动派遣伺服颅骨前去黑入。",
-    },
-    disable_auto_hack_for_noospheric_command = {
-        en = "Disable Auto Data Interrogation When Noospheric Command Talent is Equiped",
-        ["zh-cn"] = "当装备星语指令时禁用自动数据查询",
     },
     capacitance_retention = {
         en = "Capacitance Retention",

@@ -247,20 +247,6 @@ local widgets = {
                 decimals_number = 2,
             },
             {
-                setting_id      = "auto_hack_scan_interval",
-                type            = "numeric",
-                default_value   = 0.1,
-                range           = { 0, 1.0 },
-                decimals_number = 2,
-            },
-            {
-                setting_id      = "auto_hack_success_interval",
-                type            = "numeric",
-                default_value   = 0.5,
-                range           = { 0, 1.0 },
-                decimals_number = 2,
-            },
-            {
                 setting_id      = "noospheric_command_lead_time",
                 type            = "numeric",
                 default_value   = 0.2,
@@ -343,18 +329,6 @@ local widgets = {
                 keybind_trigger = "pressed",
                 keybind_type    = "function_call",
                 function_name   = "hack_mark",
-            },
-            {
-                setting_id    = "auto_hack",
-                type          = "checkbox",
-                default_value = false,
-                sub_widgets   = {
-                    {
-                        setting_id    = "disable_auto_hack_for_noospheric_command",
-                        type          = "checkbox",
-                        default_value = false,
-                    },
-                }
             },
             {
                 setting_id    = "capacitance_retention",

@@ -47,8 +47,6 @@ local mod_settings           = {
     companion_time_threshold        = mod:get("companion_time_threshold") or 0,
     servo_skull_mark_keybind        = mod:get("servo_skull_mark_keybind") or {},
     hack_mark_keybind               = mod:get("hack_mark_keybind") or {},
-    auto_hack                       = mod:get("auto_hack") or false,
-    disable_auto_hack_for_noospheric_command = mod:get("disable_auto_hack_for_noospheric_command") or false,
     capacitance_retention           = mod:get("capacitance_retention") or false,
     capacitance_retention_elite_threshold   = mod:get("capacitance_retention_elite_threshold") or 0,
     capacitance_retention_special_threshold = mod:get("capacitance_retention_special_threshold") or 0,
@@ -66,8 +64,6 @@ local mod_settings           = {
     cancel_companion_mark_interval = mod:get("cancel_companion_mark_interval") or 0.1,
     visibility_cache_duration    = mod:get("visibility_cache_duration") or 0.1,
     servo_skull_hacking_check_interval = mod:get("servo_skull_hacking_check_interval") or 0.1,
-    auto_hack_scan_interval      = mod:get("auto_hack_scan_interval") or 0.1,
-    auto_hack_success_interval   = mod:get("auto_hack_success_interval") or 0.5,
     successful_scan_interval     = mod:get("successful_scan_interval") or 0.2,
     post_mark_delay              = mod:get("post_mark_delay") or 0.5,
     noospheric_command_lead_time = mod:get("noospheric_command_lead_time") or 0.2,
@@ -604,6 +600,5 @@ mod:hook_safe(CLASS.PlayerUnitSmartTargetingExtension, "fixed_update",
             clean_caches(t, fixed_frame)
             cancel_companion_mark_on_condition(dt, t)
             auto_mark(dt, t, fixed_frame)
-            mod:auto_hack(dt, t, fixed_frame)
         end
     end)

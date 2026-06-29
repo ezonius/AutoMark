@@ -27,7 +27,6 @@ local math_huge                      = math.huge
 
 local HACK_TAG_NAME                 = "hacking_over_here_companion"
 
-local mark_interval                 = 0
 local cached_is_hacking             = false
 local last_hacking_check_t          = 0
 
@@ -161,94 +160,4 @@ function mod:is_servo_skull_hacking(t)
     return cached_is_hacking
 end
 
-local function find_hackable_target_unit()
-    local hud_element_smart_tagging = context.hud_element_smart_tagging
-    if not hud_element_smart_tagging then
-        return
-    end
 
-    local smart_tag_system = context.smart_tag_system
-    if not smart_tag_system then
-        return
-    end
-
-    Managers.event:trigger("request_world_markers_list", callback(hud_element_smart_tagging, "_cb_world_markers_list_request"))
-    local world_markers_list = hud_element_smart_tagging._world_markers_list
-    local hud_scale = Hud_hud_scale()
-    local selected_marker_distance = math_huge
-    local selected_marker_unit
-    local parent = hud_element_smart_tagging._parent
-    local player = parent:player()
-    local player_unit = player.player_unit
-    local resolution_width, resolution_height = RESOLUTION_LOOKUP.width, RESOLUTION_LOOKUP.height
-    local center_x, center_y = 0.5 * resolution_width, 0.5 * resolution_height
-    local radius = resolution_height / 8 * 3
-    local radius_squared = radius * radius
-
-    for i = 1, #world_markers_list do
-        local marker = world_markers_list[i]
-        local widget = marker.widget
-
-        if widget then
-            local distance = widget.content.distance
-
-            if hud_element_smart_tagging:_is_marker_valid_for_tagging(player_unit, marker, distance) then
-                local offset = widget.offset
-                local x = offset[1] * hud_scale
-                local y = offset[2] * hud_scale
-                local dx = x - center_x
-                local dy = y - center_y
-
-                if dx * dx + dy * dy <= radius_squared and distance < selected_marker_distance then
-                    local marker_unit = marker.unit
-                    local target_extension = smart_tag_system._unit_extension_data[marker_unit]
-                    local template_name = target_extension and target_extension:_contextual_tag_template_name(player_unit, "companion_order")
-                    if template_name == HACK_TAG_NAME then
-                        selected_marker_unit = marker_unit
-                        selected_marker_distance = distance
-                    end
-                end
-            end
-        end
-    end
-
-    return selected_marker_unit, selected_marker_distance
-end
-
-function mod:auto_hack(dt, t, fixed_frame)
-    if not mod_settings.auto_hack or (mod_settings.disable_auto_hack_for_noospheric_command and context.has_noospheric_command) or context.class_name ~= "cryptic" or not context.has_servo_skull or mod:is_servo_skull_hacking(t) then
-        return
-    end
-
-    if mark_interval > 0 then
-        mark_interval = mark_interval - dt
-        return
-    end
-
-    local smart_tag_system = context.smart_tag_system
-    if not smart_tag_system then
-        return
-    end
-
-    local player = context.player
-    local player_unit = player and player.player_unit
-    if not player_unit then
-        return
-    end
-
-    local target_unit, _ = find_hackable_target_unit()
-    if not target_unit then
-        mark_interval = mod_settings.auto_hack_scan_interval
-        return
-    end
-
-    local target_tag = smart_tag_system:unit_tag(target_unit)
-    local tagger_player = target_tag and target_tag._tagger_player
-    local tagger_player_unit = tagger_player and tagger_player.player_unit
-    if tagger_player_unit then
-        smart_tag_system:cancel_tag(target_tag._id, tagger_player_unit, true)
-    end
-
-    mark_interval = mod_settings.auto_hack_success_interval
-    smart_tag_system:set_tag(HACK_TAG_NAME, player_unit, target_unit)
-end
