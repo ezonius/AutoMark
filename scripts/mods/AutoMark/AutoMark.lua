@@ -237,6 +237,16 @@ mod.on_setting_changed    = function(setting_id)
             mod:set_menu_settings(class_name)
             mod:set("reset_button", "blank", false)
         end
+    elseif setting_id == "apply_normal_button" then
+        if mod:get(setting_id) == "apply_normal" then
+            mod:apply_to_normal_tags(class_name)
+            mod:set("apply_normal_button", "blank", false)
+        end
+    elseif setting_id == "reset_current_button" then
+        if mod:get(setting_id) == "reset_current" then
+            mod:reset_current_class(class_name)
+            mod:set("reset_current_button", "blank", false)
+        end
     elseif setting_id == "class_selection" then
         mod:set_menu_settings(class_name)
     else

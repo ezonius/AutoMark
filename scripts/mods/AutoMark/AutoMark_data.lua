@@ -317,6 +317,36 @@ local widgets = {
             },
         }
     },
+    {
+        setting_id  = "apply_to_normal_tags",
+        type        = "group",
+        sub_widgets = {
+            {
+                setting_id    = "apply_normal_button",
+                type          = "dropdown",
+                default_value = "blank",
+                options       = {
+                    { text = "apply_normal", value = "apply_normal" },
+                    { text = "blank", value = "blank" },
+                }
+            },
+        }
+    },
+    {
+        setting_id  = "reset_current_class",
+        type        = "group",
+        sub_widgets = {
+            {
+                setting_id    = "reset_current_button",
+                type          = "dropdown",
+                default_value = "blank",
+                options       = {
+                    { text = "reset_current", value = "reset_current" },
+                    { text = "blank", value = "blank" },
+                }
+            },
+        }
+    },
 }
 
 return {

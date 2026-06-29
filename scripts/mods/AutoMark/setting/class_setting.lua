@@ -52,6 +52,12 @@ function mod:init_auto_mark_settings()
         end
         local class_settings = auto_mark_settings[class_name]
         init_table(class_settings, DEFAULT_CLASS_SETTINGS)
+        if class_name == ADAMANT_COMPANION then
+            local breed_priorities = class_settings.breed_priorities
+            breed_priorities["daemonhost"] = 0
+            breed_priorities["pack_master"] = 0
+            breed_priorities["poxburster"] = 0
+        end
     end
 
     for class_name, _ in pairs(auto_mark_settings) do
@@ -120,4 +126,25 @@ function mod:get_menu_class_name()
     else
         return context.class_name or "adamant"
     end
+end
+
+
+function mod:apply_to_normal_tags(class_name)
+    if not VALID_CLASSES[class_name] then
+        return
+    end
+    local current_settings = table_clone(auto_mark_settings[class_name])
+    for archetype_name, _ in pairs(archetypes) do
+        auto_mark_settings[archetype_name] = current_settings
+    end
+    mod:set("auto_mark_settings", auto_mark_settings, false)
+end
+
+function mod:reset_current_class(class_name)
+    if not VALID_CLASSES[class_name] then
+        return
+    end
+    auto_mark_settings[class_name] = table_clone(DEFAULT_CLASS_SETTINGS)
+    mod:set("auto_mark_settings", auto_mark_settings, false)
+    mod:set_menu_settings(class_name)
 end

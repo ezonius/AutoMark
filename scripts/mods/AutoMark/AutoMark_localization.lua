@@ -343,6 +343,22 @@ local localization = {
         en = "Reset",
         ["zh-cn"] = "重置",
     },
+    apply_to_normal_tags = {
+        en = "Apply to Normal Tags",
+        ["zh-cn"] = "应用到普通标签",
+    },
+    reset_current_class = {
+        en = "Reset Current Class",
+        ["zh-cn"] = "重置当前职业",
+    },
+    apply_normal = {
+        en = "Apply to Normal",
+        ["zh-cn"] = "应用普通",
+    },
+    reset_current = {
+        en = "Reset Current",
+        ["zh-cn"] = "重置当前",
+    },
 }
 
 local function is_localization_valid(text)

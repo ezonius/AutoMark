@@ -23,3 +23,11 @@
 - **Early Escapes**: Consolidated marking conditions (cooldowns, manual mark presence, class settings) to skip the entire scanning process as early as possible.
 - **Contextual Fetching**: Moved expensive extension lookups (like player buffs and companion state) out of the unit loops, passing pre-calculated data instead.
 - **Improved Targeting Consistency**: Ensured that focus targets and execution order priorities are respected without redundant scanning passes.
+
+### [2.1.2] - 2026-05-05
+
+#### New Features
+- Added new Apply to Normal Tags option, applies current settings to normal tags only without affecting special tags (e.g. Arbites Companion Tag or Veteran Focus Target Tag)
+- Adjusted the default marking priority for Arbites companion mark. Arbites companion mark will no longer mark Daemonhost, Pack Master and Poxburster by default.
+- Added new option: Reset Current Class. Resets only the auto mark settings for the currently selected class in the menu.
+- Added scroll position memory to the settings menu. Special thanks to Alfthebigheaded for the open-source implementation.
