@@ -2,19 +2,26 @@ local mod                = get_mod("AutoMark")
 local context            = mod.context
 local mark_context       = mod.mark_context
 local TAG_NAMES          = mod.TAG_NAMES
+local ENEMY_TAG_NAME     = TAG_NAMES.ENEMY_TAG
+local VETERAN_TAG_NAME   = TAG_NAMES.VETERAN_TAG
+local COMPANION_TAG_NAME = TAG_NAMES.COMPANION_TAG
+local SERVO_SKULL_TAG_NAME = TAG_NAMES.SERVO_SKULL_TAG
+local mod_settings       = mod.settings
+
+-- Imports
+local TalentSettings              = require("scripts/settings/talent/talent_settings")
+local FixedFrame                  = require("scripts/utilities/fixed_frame")
+local cryptic_talent_settings     = TalentSettings.cryptic
+local noospheric_command_duration = cryptic_talent_settings.servo_skull_shooting_tagging.duration
 
 -- Global Cache
 local CLASS              = CLASS
 local ScriptUnit         = ScriptUnit
 
--- Delay for Server Latency, Interval for Auto Mark
-local AUTO_MARK_DELAY    = 0.5
-local AUTO_MARK_INTERVAL = 0.2
-
 -- set delay and interval for auto mark
 local function on_set_tag(tag_context)
-    mark_context.auto_mark_interval = AUTO_MARK_INTERVAL
-    tag_context.delay = AUTO_MARK_DELAY
+    mark_context.auto_mark_interval = mod_settings.successful_scan_interval
+    tag_context.delay = mod_settings.post_mark_delay
 end
 
 -- record manual marked unit
@@ -61,11 +68,11 @@ function mod:mark(tag_name, target_unit, target_tag)
     end
 
     if target_tag then
-        if tag_name == TAG_NAMES.ENEMY_TAG then
+        if tag_name == ENEMY_TAG_NAME then
             return
-        elseif tag_name == TAG_NAMES.COMPANION_TAG or tag_name == TAG_NAMES.VETERAN_TAG then
+        elseif tag_name == COMPANION_TAG_NAME or tag_name == VETERAN_TAG_NAME or tag_name == SERVO_SKULL_TAG_NAME then
             local template = target_tag._template
-            local is_enemy_mark = template and template.name == TAG_NAMES.ENEMY_TAG
+            local is_enemy_mark = template and template.name == ENEMY_TAG_NAME
             if is_enemy_mark then
                 local tagger_player = target_tag._tagger_player
                 local tagger_player_unit = tagger_player and tagger_player.player_unit
@@ -158,9 +165,16 @@ mod:hook_safe(CLASS.SmartTag, "init",
             local pounce_setting = target_breed_data and target_breed_data.companion_pounce_setting
             local pounce_action = pounce_setting and pounce_setting.companion_pounce_action
             if pounce_action == "human" then
-                tag_context.is_cancelable = true
+                tag_context.is_cancelable = mod_settings.companion_cancel_mark_human
             else
-                tag_context.is_cancelable = false
+                tag_context.is_cancelable = mod_settings.companion_cancel_mark_non_human
+            end
+        elseif tag_name == TAG_NAMES.SERVO_SKULL_TAG then
+            if context.has_noospheric_command then
+                local t = FixedFrame.get_latest_fixed_time()
+                tag_context.noospheric_command_next_time = t + noospheric_command_duration - mod_settings.noospheric_command_lead_time
+            else
+                tag_context.noospheric_command_next_time = math.huge
             end
         end
     end)
@@ -180,6 +194,9 @@ mod:hook(CLASS.SmartTag, "destroy",
             tag_context.tag = nil
             tag_context.is_manual = false
             tag_context.pounce_start_time = nil
+            if tag_name == TAG_NAMES.SERVO_SKULL_TAG then
+                tag_context.noospheric_command_next_time = math.huge
+            end
         end
 
         return func(self)

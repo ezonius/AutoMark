@@ -110,6 +110,7 @@ other_widget.sub_widgets = other_priorities
 local class_options = {
     { text = "adamant_companion",    value = "adamant_companion" },
     { text = "veteran_focus_target", value = "veteran_focus_target" },
+    { text = "cryptic_servo_skull",  value = "cryptic_servo_skull" },
 }
 
 for class_name, _ in pairs(archetypes) do
@@ -117,6 +118,56 @@ for class_name, _ in pairs(archetypes) do
 end
 
 table.sort(class_options, function(a, b) return a.text < b.text end)
+
+local noospheric_command_breed_name_options = {}
+do
+    local elite_breed_names = {}
+    local special_breed_names = {}
+    local boss_breed_names = {}
+    local captain_breed_names = {}
+    local other_breed_names = {}
+
+    for breed_name, breed_data in pairs(breeds) do
+        if Breed.is_minion(breed_data) and breed_data.smart_tag_target_type == "breed" then
+            local option = { text = breed_name, value = breed_name }
+            if breed_data.tags.elite then
+                elite_breed_names[#elite_breed_names + 1] = option
+            elseif breed_data.tags.special then
+                special_breed_names[#special_breed_names + 1] = option
+            elseif breed_data.is_boss then
+                boss_breed_names[#boss_breed_names + 1] = option
+            elseif breed_data.faction_name ~= "imperium" then
+                other_breed_names[#other_breed_names + 1] = option
+            end
+        end
+    end
+
+    local compare_breed_text = function(a, b)
+        return mod:localize(a.text) < mod:localize(b.text)
+    end
+
+    table.sort(elite_breed_names, compare_breed_text)
+    table.sort(special_breed_names, compare_breed_text)
+    table.sort(boss_breed_names, compare_breed_text)
+    table.sort(captain_breed_names, compare_breed_text)
+    table.sort(other_breed_names, compare_breed_text)
+
+    for i = 1, #elite_breed_names do
+        noospheric_command_breed_name_options[#noospheric_command_breed_name_options + 1] = elite_breed_names[i]
+    end
+    for i = 1, #special_breed_names do
+        noospheric_command_breed_name_options[#noospheric_command_breed_name_options + 1] = special_breed_names[i]
+    end
+    for i = 1, #boss_breed_names do
+        noospheric_command_breed_name_options[#noospheric_command_breed_name_options + 1] = boss_breed_names[i]
+    end
+    for i = 1, #captain_breed_names do
+        noospheric_command_breed_name_options[#noospheric_command_breed_name_options + 1] = captain_breed_names[i]
+    end
+    for i = 1, #other_breed_names do
+        noospheric_command_breed_name_options[#noospheric_command_breed_name_options + 1] = other_breed_names[i]
+    end
+end
 
 -- Manual settings
 local widgets = {
@@ -150,6 +201,75 @@ local widgets = {
         }
     },
     {
+        setting_id = "throttling_settings",
+        type = "group",
+        sub_widgets = {
+            {
+                setting_id      = "scan_interval",
+                type            = "numeric",
+                default_value   = 0.1,
+                range           = { 0, 1.0 },
+                decimals_number = 2,
+            },
+            {
+                setting_id      = "successful_scan_interval",
+                type            = "numeric",
+                default_value   = 0.2,
+                range           = { 0, 1.0 },
+                decimals_number = 2,
+            },
+            {
+                setting_id      = "post_mark_delay",
+                type            = "numeric",
+                default_value   = 0.5,
+                range           = { 0, 1.0 },
+                decimals_number = 2,
+            },
+            {
+                setting_id      = "cancel_companion_mark_interval",
+                type            = "numeric",
+                default_value   = 0.1,
+                range           = { 0, 1.0 },
+                decimals_number = 2,
+            },
+            {
+                setting_id      = "visibility_cache_duration",
+                type            = "numeric",
+                default_value   = 0.1,
+                range           = { 0, 1.0 },
+                decimals_number = 2,
+            },
+            {
+                setting_id      = "servo_skull_hacking_check_interval",
+                type            = "numeric",
+                default_value   = 0.1,
+                range           = { 0, 1.0 },
+                decimals_number = 2,
+            },
+            {
+                setting_id      = "auto_hack_scan_interval",
+                type            = "numeric",
+                default_value   = 0.1,
+                range           = { 0, 1.0 },
+                decimals_number = 2,
+            },
+            {
+                setting_id      = "auto_hack_success_interval",
+                type            = "numeric",
+                default_value   = 0.5,
+                range           = { 0, 1.0 },
+                decimals_number = 2,
+            },
+            {
+                setting_id      = "noospheric_command_lead_time",
+                type            = "numeric",
+                default_value   = 0.2,
+                range           = { 0, 1.0 },
+                decimals_number = 2,
+            },
+        }
+    },
+    {
         setting_id = "adamant_settings",
         type = "group",
         sub_widgets = {
@@ -178,6 +298,16 @@ local widgets = {
                 default_value = false,
                 sub_widgets   = {
                     {
+                        setting_id    = "companion_cancel_mark_human",
+                        type          = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id    = "companion_cancel_mark_non_human",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                    {
                         setting_id      = "companion_health_threshold",
                         type            = "numeric",
                         default_value   = 0,
@@ -189,6 +319,120 @@ local widgets = {
                         type          = "numeric",
                         default_value = 0,
                         range         = { 0, 25 },
+                    },
+                }
+            },
+        }
+    },
+    {
+        setting_id = "cryptic_settings",
+        type = "group",
+        sub_widgets = {
+            {
+                setting_id      = "servo_skull_mark_keybind",
+                type            = "keybind",
+                default_value   = {},
+                keybind_trigger = "pressed",
+                keybind_type    = "function_call",
+                function_name   = "servo_skull_mark",
+            },
+            {
+                setting_id      = "hack_mark_keybind",
+                type            = "keybind",
+                default_value   = {},
+                keybind_trigger = "pressed",
+                keybind_type    = "function_call",
+                function_name   = "hack_mark",
+            },
+            {
+                setting_id    = "auto_hack",
+                type          = "checkbox",
+                default_value = false,
+                sub_widgets   = {
+                    {
+                        setting_id    = "disable_auto_hack_for_noospheric_command",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                }
+            },
+            {
+                setting_id    = "capacitance_retention",
+                type          = "checkbox",
+                default_value = false,
+                sub_widgets   = {
+                    {
+                        setting_id    = "capacitance_retention_elite_threshold",
+                        type          = "numeric",
+                        default_value = 0,
+                        range         = { 0, 100 },
+                    },
+                    {
+                        setting_id    = "capacitance_retention_special_threshold",
+                        type          = "numeric",
+                        default_value = 0,
+                        range         = { 0, 100 },
+                    },
+                    {
+                        setting_id    = "capacitance_retention_boss_threshold",
+                        type          = "numeric",
+                        default_value = 0,
+                        range         = { 0, 100 },
+                    },
+                }
+            },
+            {
+                setting_id    = "noospheric_command_boost",
+                type          = "checkbox",
+                default_value = false,
+                sub_widgets   = {
+                    {
+                        setting_id    = "noospheric_command_boost_elite",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                    {
+                        setting_id    = "noospheric_command_boost_special",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                    {
+                        setting_id    = "noospheric_command_boost_boss",
+                        type          = "checkbox",
+                        default_value = false,
+                    },
+                    {
+                        setting_id    = "noospheric_command_boost_breed_name",
+                        type          = "dropdown",
+                        default_value = noospheric_command_breed_name_options[1] and noospheric_command_breed_name_options[1].value or "blank",
+                        options       = noospheric_command_breed_name_options,
+                        sub_widgets   = {
+                            {
+                                setting_id    = "noospheric_command_boost_breed_override",
+                                type          = "checkbox",
+                                default_value = false,
+                            },
+                            {
+                                setting_id    = "noospheric_command_boost_breed_toggle",
+                                type          = "checkbox",
+                                default_value = false,
+                            },
+                            {
+                                setting_id    = "capacitance_retention_breed_threshold",
+                                type          = "numeric",
+                                default_value = 0,
+                                range         = { 0, 100 },
+                            },
+                        }
+                    },
+                    {
+                        setting_id    = "noospheric_command_boost_reset",
+                        type          = "dropdown",
+                        default_value = "blank",
+                        options       = {
+                            { text = "blank", value = "blank" },
+                            { text = "reset", value = "reset" },
+                        }
                     },
                 }
             },

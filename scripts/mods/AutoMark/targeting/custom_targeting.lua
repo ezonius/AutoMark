@@ -1,12 +1,19 @@
-local mod                       = get_mod("AutoMark")
-local context                   = mod.context
-local mark_context              = mod.mark_context
-local TAG_NAMES                 = mod.TAG_NAMES
-local mod_settings              = mod.settings
-local visibility_cache          = mod.visibility_cache
-local visibility_check_frame    = mod.visibility_check_frame
-local unit_metadata_cache       = mod.unit_metadata_cache
-local unit_metadata_cache_frame = mod.unit_metadata_cache_frame
+local mod                                   = get_mod("AutoMark")
+local context                               = mod.context
+local mark_context                          = mod.mark_context
+local TAG_NAMES                             = mod.TAG_NAMES
+local ENEMY_TAG_NAME                         = TAG_NAMES.ENEMY_TAG
+local VETERAN_TAG_NAME                       = TAG_NAMES.VETERAN_TAG
+local COMPANION_TAG_NAME                     = TAG_NAMES.COMPANION_TAG
+local SERVO_SKULL_TAG_NAME                   = TAG_NAMES.SERVO_SKULL_TAG
+local mod_settings                          = mod.settings
+local noospheric_command_breed_settings     = mod.noospheric_command_breed_settings
+local visibility_cache                      = mod.visibility_cache
+local visibility_check_frame                = mod.visibility_check_frame
+local servo_skull_visibility_cache          = mod.servo_skull_visibility_cache
+local servo_skull_visibility_check_frame    = mod.servo_skull_visibility_check_frame
+local unit_metadata_cache                   = mod.unit_metadata_cache
+local unit_metadata_cache_frame             = mod.unit_metadata_cache_frame
 
 -- Frame Cache for Raycast
 local last_raycast_frame        = -1
@@ -18,10 +25,14 @@ local last_right                = nil
 local last_up                   = nil
 
 -- Imports
-local Breed                     = require("scripts/utilities/breed")
-local Breed_height              = Breed.height
+local Breed                                 = require("scripts/utilities/breed")
+local MinionPerception                      = require("scripts/utilities/minion_perception")
+local SpecialRulesSettings                  = require("scripts/settings/ability/special_rules_settings")
+local Breed_height                          = Breed.height
+local special_rules                         = SpecialRulesSettings.special_rules
 
 -- Global Cache
+local Managers                  = Managers
 local HEALTH_ALIVE              = HEALTH_ALIVE
 local Actor_unit                = Actor.unit
 local Actor_world_bounds        = Actor.world_bounds
@@ -43,6 +54,7 @@ local Vector3_distance_squared  = Vector3.distance_squared
 local Matrix4x4_right           = Matrix4x4.right
 local Matrix4x4_forward         = Matrix4x4.forward
 
+
 -- Constants
 local INDEX_POSITION            = 1
 local INDEX_DISTANCE            = 2
@@ -52,7 +64,8 @@ local COLLISION_FILTER          = "filter_player_ping_target_selection"
 local EMPTY_TABLE               = {}
 
 -- Params
-local visibility_raycast_object = nil
+local visibility_raycast_object             = nil
+local servo_skull_visibility_raycast_object = nil
 
 function mod:reset_targeting_cache()
     last_raycast_frame = -1
@@ -68,8 +81,38 @@ function mod:init_visibility_raycast()
     local smart_targeting_extension = context.smart_targeting_extension
     local physics_world = smart_targeting_extension and smart_targeting_extension._physics_world
     if physics_world then
-        visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "both",
+        visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "statics",
             "collision_filter", "filter_interactable_line_of_sight_marker_check")
+        servo_skull_visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "statics",
+            "collision_filter", "filter_minion_line_of_sight_check")
+    end
+end
+
+function mod:destroy_visibility_raycast()
+    visibility_raycast_object = nil
+    servo_skull_visibility_raycast_object = nil
+end
+
+local function get_breed_priority(target_unit, breed_data, breed_priorities, breed_name_passive)
+    local breed_name = breed_data and breed_data.name
+    if not breed_name then
+        return 0
+    end
+
+    local tags = breed_data.tags
+    if tags and tags.witch then
+        local gsm = Managers.state.game_session
+        local usm = Managers.state.unit_spawner
+        local game_session = gsm and gsm:game_session()
+        local game_object_id = usm and usm:game_object_id(target_unit)
+        local is_aggroed = MinionPerception.target_unit(game_session, game_object_id)
+        if is_aggroed then
+            return breed_priorities[breed_name] or 0
+        else
+            return breed_priorities[breed_name_passive] or 0
+        end
+    else
+        return breed_priorities[breed_name] or 0
     end
 end
 
@@ -94,10 +137,10 @@ end
 
 -- Check if Tagged Target Unit can be Marked with Current Tag
 local function is_target_valid(tag_name, target_tag, target_unit, target_unit_position, companion_unit_position, talent_resource_component)
-    if tag_name == TAG_NAMES.COMPANION_TAG then
+    if tag_name == COMPANION_TAG_NAME then
         -- arbite shouldn't mark any arbite's prey or veteran's prey
         local target_tag_name = target_tag and target_tag._template.name
-        if target_tag_name == TAG_NAMES.COMPANION_TAG or target_tag_name == TAG_NAMES.VETERAN_TAG then
+        if target_tag_name == COMPANION_TAG_NAME or target_tag_name == VETERAN_TAG_NAME then
             return false
         end
 
@@ -124,7 +167,7 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_unit_po
         if Vector3_distance_squared(companion_unit_position, target_unit_position) < companion_range_limitation * companion_range_limitation then
             return true
         end
-    elseif tag_name == TAG_NAMES.VETERAN_TAG then
+    elseif tag_name == VETERAN_TAG_NAME then
         local metadata = unit_metadata_cache[target_unit]
         local target_buff_extension = metadata and metadata.buff_extension
         if not target_buff_extension then
@@ -140,12 +183,12 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_unit_po
         local target_stack_count = focus_target_debuff and focus_target_debuff:stack_count() or 0
         local target_tag_name = target_tag and target_tag._template.name
         -- target does not have focus target debuff
-        if target_tag_name ~= TAG_NAMES.VETERAN_TAG and target_stack_count <= 0 then
+        if target_tag_name ~= VETERAN_TAG_NAME and target_stack_count <= 0 then
             return true
         end
 
         -- latency bug
-        if target_tag_name == TAG_NAMES.VETERAN_TAG and target_stack_count <= 0 then
+        if target_tag_name == VETERAN_TAG_NAME and target_stack_count <= 0 then
             return false
         end
 
@@ -171,6 +214,63 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_unit_po
         if player_stack_count == context.focus_target_max_stacks or player_stack_count - target_stack_count >= mod_settings.focus_target_overwrite_delta then
             return true
         end
+    elseif tag_name == SERVO_SKULL_TAG_NAME then
+        if target_tag then
+            local target_tag_name = target_tag._template.name
+            if target_tag_name == COMPANION_TAG_NAME or target_tag_name == VETERAN_TAG_NAME or target_tag_name == SERVO_SKULL_TAG_NAME then
+                return false
+            end
+        end
+
+        if not mod_settings.capacitance_retention or not context.has_noospheric_command then
+            return true
+        end
+
+        local player_ability_extension = context.player_ability_extension
+        if not player_ability_extension then
+            return false
+        end
+
+        local metadata = unit_metadata_cache[target_unit]
+        local breed_data = metadata and metadata.breed_data
+        if not breed_data then
+            local unit_data_extension = ScriptUnit_extension(target_unit, "unit_data_system")
+            breed_data = unit_data_extension and unit_data_extension._breed
+        end
+
+        if not breed_data then
+            return false
+        end
+
+        local breed_name = breed_data.name
+        local breed_settings = noospheric_command_breed_settings[breed_name]
+        local capacitance_retention_threshold
+        if breed_settings and breed_settings.override then
+            capacitance_retention_threshold = breed_settings.threshold or 0
+        end
+
+        if capacitance_retention_threshold == nil then
+            if breed_data.is_boss then
+                capacitance_retention_threshold = mod_settings.capacitance_retention_boss_threshold
+            elseif breed_data.tags.special then
+                capacitance_retention_threshold = mod_settings.capacitance_retention_special_threshold
+            else
+                capacitance_retention_threshold = mod_settings.capacitance_retention_elite_threshold
+            end
+        end
+
+        local max_ability_charges = player_ability_extension:max_ability_charges("combat_ability")
+        local remaining_ability_charges = player_ability_extension:remaining_ability_charges("combat_ability")
+        local max_ability_cooldown = player_ability_extension:max_ability_cooldown("combat_ability")
+        local remaining_ability_cooldown = player_ability_extension:remaining_ability_cooldown("combat_ability")
+
+        local current_capacitance = remaining_ability_charges
+        if remaining_ability_charges < max_ability_charges and max_ability_cooldown > 0 then
+            current_capacitance = current_capacitance + math_max(0, (max_ability_cooldown - remaining_ability_cooldown) / max_ability_cooldown)
+        end
+        local current_percentage = max_ability_charges > 0 and (current_capacitance / max_ability_charges * 100) or 100
+
+        return current_percentage >= capacitance_retention_threshold
     elseif tag_name == TAG_NAMES.ENEMY_TAG then
         if not target_tag then
             return true
@@ -180,15 +280,15 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_unit_po
     return false
 end
 
-local function is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, fixed_frame, dist_sq)
+local function is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq)
     if not visibility_raycast_object then
         return false
     end
 
     local cached_visibility = visibility_cache[hit_unit]
-    local last_check_frame = visibility_check_frame[hit_unit]
-    -- Cache for 10 frames (~0.16s) to cover the scan interval
-    if cached_visibility ~= nil and fixed_frame - last_check_frame < 10 then
+    local last_check_t = visibility_check_frame[hit_unit]
+    -- Cache for selected duration to cover the scan interval
+    if cached_visibility ~= nil and t - last_check_t < mod_settings.visibility_cache_duration then
         return cached_visibility
     end
 
@@ -203,12 +303,107 @@ local function is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, fixe
         ray_to_target / ray_length, ray_length
     )
     visibility_cache[hit_unit] = not hit
-    visibility_check_frame[hit_unit] = fixed_frame
+    visibility_check_frame[hit_unit] = t
     return not hit
 end
 
+function mod:is_servo_skull_target_visible(target_unit, t)
+    if not servo_skull_visibility_raycast_object then
+        return false
+    end
+
+    local cached_visibility = servo_skull_visibility_cache[target_unit]
+    local last_check_t = servo_skull_visibility_check_frame[target_unit]
+    if cached_visibility ~= nil and t - last_check_t < mod_settings.visibility_cache_duration then
+        return cached_visibility
+    end
+
+    local companion_spawner_extension = context.companion_spawner_extension
+    local servo_skull_unit = companion_spawner_extension and companion_spawner_extension:spawned_unit_lookup(special_rules.cryptic_servo_skull_hack)
+    if not Unit_alive(servo_skull_unit) then
+        return false
+    end
+
+    local metadata = unit_metadata_cache[target_unit]
+    if not metadata then
+        local unit_data_extension = ScriptUnit_extension(target_unit, "unit_data_system")
+        local breed_data = unit_data_extension and unit_data_extension._breed
+        local breed_name = breed_data and breed_data.name
+        metadata = {
+            breed_data = breed_data,
+            breed_name = breed_name,
+            breed_name_passive = breed_name and breed_name .. "_passive",
+        }
+        unit_metadata_cache[target_unit] = metadata
+    end
+
+    local breed_data = metadata.breed_data
+    local ray_origin = Unit_world_position(servo_skull_unit, 1)
+    local target_pos = Unit_world_position(target_unit, 1) + Vector3(0, 0, Breed_height(target_unit, breed_data) * 0.5)
+    local ray_to_target = target_pos - ray_origin
+    local ray_length = Vector3_length(ray_to_target)
+
+    if ray_length < 0.0001 then
+        return true
+    end
+
+    local hit = Raycast_cast(
+        servo_skull_visibility_raycast_object, ray_origin,
+        ray_to_target / ray_length, ray_length
+    )
+
+    servo_skull_visibility_cache[target_unit] = not hit
+    servo_skull_visibility_check_frame[target_unit] = t
+    return not hit
+end
+
+function mod:is_noospheric_command_boost_breed_valid(target_unit)
+    local metadata = unit_metadata_cache[target_unit]
+    if not metadata then
+        local unit_data_extension = ScriptUnit_extension(target_unit, "unit_data_system")
+        local breed_data = unit_data_extension and unit_data_extension._breed
+        local breed_name = breed_data and breed_data.name
+        metadata = {
+            breed_data = breed_data,
+            breed_name = breed_name,
+            breed_name_passive = breed_name and breed_name .. "_passive",
+        }
+        unit_metadata_cache[target_unit] = metadata
+    end
+
+    local breed_data = metadata.breed_data
+    if not breed_data then
+        return false
+    end
+
+    if breed_data.tags.witch then
+        local gsm = Managers.state.game_session
+        local usm = Managers.state.unit_spawner
+        local game_session = gsm and gsm:game_session()
+        local game_object_id = usm and usm:game_object_id(target_unit)
+        local is_aggroed = MinionPerception.target_unit(game_session, game_object_id)
+        if not is_aggroed then
+            return false
+        end
+    end
+
+    local breed_name = breed_data.name
+    local breed_settings = noospheric_command_breed_settings[breed_name]
+    if breed_settings and breed_settings.override then
+        return breed_settings.toggle
+    end
+
+    if breed_data.is_boss then
+        return mod_settings.noospheric_command_boost_boss
+    elseif breed_data.tags.special then
+        return mod_settings.noospheric_command_boost_special
+    else
+        return mod_settings.noospheric_command_boost_elite
+    end
+end
+
 function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_context, class_settings, use_filter,
-                                     is_execution_order_priority, marked_tag)
+                                     is_execution_order_priority, marked_tag, t)
     local player = context.player
     local player_unit = player and player.player_unit
     local smart_targeting_extension = context.smart_targeting_extension
@@ -250,7 +445,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
 
     -- Pre-calculate context data for is_target_valid
     local companion_unit_position = nil
-    if tag_name == TAG_NAMES.COMPANION_TAG then
+    if tag_name == COMPANION_TAG_NAME then
         local companion_range_limitation = mod_settings.companion_range_limitation
         if companion_range_limitation > 0 then
             local companion_spawner_extension = context.companion_spawner_extension
@@ -259,7 +454,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
             companion_unit_position = companion_unit and Unit_world_position(companion_unit, 1)
         end
     end
-    local talent_resource_component = (tag_name == TAG_NAMES.VETERAN_TAG) and context.talent_resource_component or nil
+    local talent_resource_component = (tag_name == VETERAN_TAG_NAME) and context.talent_resource_component or nil
 
     local canceled_unit = tag_context and tag_context.canceled_unit
     local breed_priorities = class_settings and class_settings.breed_priorities or EMPTY_TABLE
@@ -277,7 +472,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
         local unit_data_extension = ScriptUnit_extension(best_unit, "unit_data_system")
         local breed_data = unit_data_extension and unit_data_extension._breed
         local breed_name = breed_data and breed_data.name
-        best_unit_priority = breed_priorities[breed_name] or 0
+        best_unit_priority = get_breed_priority(best_unit, breed_data, breed_priorities, breed_name and breed_name .. "_passive")
         best_unit_marked_by_execution_order = not not execution_order_units[best_unit]
     end
 
@@ -312,10 +507,12 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
         if not metadata then
             local unit_data_extension = ScriptUnit_extension(hit_unit, "unit_data_system")
             local breed_data = unit_data_extension and unit_data_extension._breed
+            local breed_name = breed_data and breed_data.name
             local is_taggable = not not (breed_data and breed_data.smart_tag_target_type == "breed")
             metadata = {
                 breed_data = breed_data,
-                breed_name = breed_data and breed_data.name,
+                breed_name = breed_name,
+                breed_name_passive = breed_name and breed_name .. "_passive",
                 is_taggable = is_taggable,
                 half_extent_right = breed_data and (breed_data.half_extent_right or 0.3) or 0.3,
                 half_extent_forward = breed_data and (breed_data.half_extent_forward or 0.3) or 0.3,
@@ -330,7 +527,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
             goto continue_loop
         end
 
-        local hit_unit_priority = breed_priorities[metadata.breed_name] or 0
+        local hit_unit_priority = get_breed_priority(hit_unit, breed_data, breed_priorities, metadata.breed_name_passive)
         -- filter unit by type and priority
         if use_filter and (hit_unit_priority <= 0 or not is_breed_valid(breed_data, class_settings)) then
             goto continue_loop
@@ -403,7 +600,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
 
         if type == "auto" then
             -- Visibility check is expensive, do it last
-            if not is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, fixed_frame, dist_sq) then
+            if not is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq) then
                 goto continue_loop
             end
 
@@ -431,7 +628,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
                 goto continue_loop
             end
 
-            if not is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, fixed_frame, dist_sq) then
+            if not is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq) then
                 goto continue_loop
             end
 
@@ -460,6 +657,8 @@ end
 
 mod:hook_safe(CLASS.PrecisionTargetFinder, "init",
     function(self, is_server, is_local_unit, player, physics_world, unit)
-        visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "both",
+        visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "statics",
             "collision_filter", "filter_interactable_line_of_sight_marker_check")
+        servo_skull_visibility_raycast_object = PhysicsWorld.make_raycast(physics_world, "closest", "types", "statics",
+            "collision_filter", "filter_minion_line_of_sight_check")
     end)
