@@ -92,14 +92,6 @@ local localization = {
         en = "How long a visibility check result remains cached for a unit.",
         ["zh-cn"] = "单位的视野检查结果在缓存中保留多长时间。",
     },
-    servo_skull_hacking_check_interval = {
-        en = "Servo-Skull Hacking Check Interval",
-        ["zh-cn"] = "伺服颅骨黑入检查间隔",
-    },
-    servo_skull_hacking_check_interval_description = {
-        en = "How often to check if the servo-skull is currently hacking.",
-        ["zh-cn"] = "检查伺服颅骨当前是否正在黑入的频率。",
-    },
     noospheric_command_lead_time = {
         en = "Noospheric Command Re-mark Lead Time",
         ["zh-cn"] = "星语指令重新标记提前时间",
@@ -215,14 +207,6 @@ local localization = {
             "当" .. highlight("伙伴目标标记") ..
             "设置为" .. highlight("按一次") ..
             "时，此功能变为普通敌人标记。",
-    },
-    hack_mark_keybind = {
-        en = "Data Interrogation Keybind",
-        ["zh-cn"] = "数据查询按键",
-    },
-    hack_mark_keybind_description = {
-        en = "Dedicated key for Sending the Servo-Skull to hack the minigame.",
-        ["zh-cn"] = "用于指派伺服颅骨黑入数据查询小游戏的专用按键。",
     },
     capacitance_retention = {
         en = "Capacitance Retention",

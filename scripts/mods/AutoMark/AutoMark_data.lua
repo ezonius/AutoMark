@@ -240,13 +240,6 @@ local widgets = {
                 decimals_number = 2,
             },
             {
-                setting_id      = "servo_skull_hacking_check_interval",
-                type            = "numeric",
-                default_value   = 0.1,
-                range           = { 0, 1.0 },
-                decimals_number = 2,
-            },
-            {
                 setting_id      = "noospheric_command_lead_time",
                 type            = "numeric",
                 default_value   = 0.2,
@@ -321,14 +314,6 @@ local widgets = {
                 keybind_trigger = "pressed",
                 keybind_type    = "function_call",
                 function_name   = "servo_skull_mark",
-            },
-            {
-                setting_id      = "hack_mark_keybind",
-                type            = "keybind",
-                default_value   = {},
-                keybind_trigger = "pressed",
-                keybind_type    = "function_call",
-                function_name   = "hack_mark",
             },
             {
                 setting_id    = "capacitance_retention",

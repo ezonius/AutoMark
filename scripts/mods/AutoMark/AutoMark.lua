@@ -46,7 +46,6 @@ local mod_settings           = {
     companion_health_threshold      = mod:get("companion_health_threshold") or 0,
     companion_time_threshold        = mod:get("companion_time_threshold") or 0,
     servo_skull_mark_keybind        = mod:get("servo_skull_mark_keybind") or {},
-    hack_mark_keybind               = mod:get("hack_mark_keybind") or {},
     capacitance_retention           = mod:get("capacitance_retention") or false,
     capacitance_retention_elite_threshold   = mod:get("capacitance_retention_elite_threshold") or 0,
     capacitance_retention_special_threshold = mod:get("capacitance_retention_special_threshold") or 0,
@@ -63,7 +62,6 @@ local mod_settings           = {
     scan_interval                = mod:get("scan_interval") or 0.1,
     cancel_companion_mark_interval = mod:get("cancel_companion_mark_interval") or 0.1,
     visibility_cache_duration    = mod:get("visibility_cache_duration") or 0.1,
-    servo_skull_hacking_check_interval = mod:get("servo_skull_hacking_check_interval") or 0.1,
     successful_scan_interval     = mod:get("successful_scan_interval") or 0.2,
     post_mark_delay              = mod:get("post_mark_delay") or 0.5,
     noospheric_command_lead_time = mod:get("noospheric_command_lead_time") or 0.2,
@@ -367,7 +365,7 @@ local function is_tag_valid(tag_name, t)
     elseif tag_name == ENEMY_TAG_NAME then
         return context.can_use_enemy
     elseif tag_name == SERVO_SKULL_TAG_NAME then
-        return context.can_use_servo_skull and not mod:is_servo_skull_hacking(t)
+        return context.can_use_servo_skull
     end
     return false
 end
