@@ -40,13 +40,15 @@ local mod_settings           = {
     debug_mode                   = mod:get("debug_mode") or false,
     companion_mark_keybind       = mod:get("companion_mark_keybind") or {},
     execution_order_priority     = mod:get("execution_order_priority") or false,
-    companion_range_limitation   = mod:get("companion_range_limitation") or 0,
+    companion_min_range         = mod:get("companion_min_range") or 0,
+    companion_max_range         = mod:get("companion_max_range") or 100,
     companion_cancel_mark_human     = mod:get("companion_cancel_mark_human") or false,
     companion_cancel_mark_non_human = mod:get("companion_cancel_mark_non_human") or false,
     companion_health_threshold      = mod:get("companion_health_threshold") or 0,
     companion_time_threshold        = mod:get("companion_time_threshold") or 0,
     servo_skull_mark_keybind        = mod:get("servo_skull_mark_keybind") or {},
-    servo_skull_range_limitation    = mod:get("servo_skull_range_limitation") or 30,
+    servo_skull_min_range       = mod:get("servo_skull_min_range") or 0,
+    servo_skull_max_range       = mod:get("servo_skull_max_range") or 30,
     capacitance_retention           = mod:get("capacitance_retention") or false,
     capacitance_retention_elite_threshold   = mod:get("capacitance_retention_elite_threshold") or 0,
     capacitance_retention_special_threshold = mod:get("capacitance_retention_special_threshold") or 0,
@@ -66,6 +68,7 @@ local mod_settings           = {
     successful_scan_interval     = mod:get("successful_scan_interval") or 0.2,
     post_mark_delay              = mod:get("post_mark_delay") or 0.5,
     noospheric_command_lead_time = mod:get("noospheric_command_lead_time") or 0.2,
+    max_visibility_checks        = mod:get("max_visibility_checks") or 2,
 }
 mod.settings                 = mod_settings
 
@@ -372,7 +375,7 @@ local function is_tag_valid(tag_name, t)
 end
 
 -- Auto-Mark Target Unit with the Tag
-local function auto_mark_by_tag(tag_name, t, fixed_frame)
+local function auto_mark_by_tag(tag_name, t, fixed_frame, precalculated_target)
     if not is_tag_valid(tag_name, t) then
         return false
     end
@@ -421,7 +424,10 @@ local function auto_mark_by_tag(tag_name, t, fixed_frame)
     end
 
     local target_unit, target_tag
-    if is_cooldown_ready then
+    if precalculated_target then
+        target_unit = precalculated_target.unit
+        target_tag = precalculated_target.tag
+    elseif is_cooldown_ready then
         if tag_name == SERVO_SKULL_TAG_NAME and mod_settings.capacitance_retention and context.has_noospheric_command then
             local player_ability_extension = context.player_ability_extension
             if player_ability_extension then
@@ -489,6 +495,71 @@ local function auto_mark(dt, t, fixed_frame)
         mark_context.auto_mark_interval = auto_mark_interval
     end
 
+    -- Prepare active tags for consolidated targeting
+    local active_tags = {}
+    local has_any_active = false
+    
+    for i = 1, #TAG_LIST do
+        local tag_name = TAG_LIST[i]
+        if is_tag_valid(tag_name, t) then
+            local tag_context = mark_context[tag_name]
+            local class_settings = mod:get_class_settings(tag_name)
+            local marked_tag = tag_context.tag
+            
+            if class_settings and class_settings.toggle_class and context.smart_tag_system then
+                if not tag_context.is_manual or class_settings.override_manual then
+                    local is_cooldown_ready = tag_context.cooldown <= 0 and (not class_settings.mark_limit or not marked_tag)
+                    local is_priority_switch = marked_tag and class_settings.priority_switch
+                    local is_execution_order_priority = marked_tag
+                        and tag_name == TAG_NAMES.COMPANION_TAG
+                        and mod_settings.execution_order_priority
+                    
+                    if is_cooldown_ready or is_priority_switch or is_execution_order_priority then
+                        -- Capacitance retention check for servo skull
+                        local skip = false
+                        if is_cooldown_ready and tag_name == SERVO_SKULL_TAG_NAME and mod_settings.capacitance_retention and context.has_noospheric_command then
+                            local player_ability_extension = context.player_ability_extension
+                            if player_ability_extension then
+                                local max_ability_charges = player_ability_extension:max_ability_charges("combat_ability")
+                                local remaining_ability_charges = player_ability_extension:remaining_ability_charges("combat_ability")
+                                local max_ability_cooldown = player_ability_extension:max_ability_cooldown("combat_ability")
+                                local remaining_ability_cooldown = player_ability_extension:remaining_ability_cooldown("combat_ability")
+                                local current_capacitance = remaining_ability_charges
+                                if remaining_ability_charges < max_ability_charges and max_ability_cooldown > 0 then
+                                    current_capacitance = current_capacitance + math.max(0, (max_ability_cooldown - remaining_ability_cooldown) / max_ability_cooldown)
+                                end
+                                local current_percentage = max_ability_charges > 0 and (current_capacitance / max_ability_charges * 100) or 100
+                                local min_threshold = math.max(mod_settings.capacitance_retention_elite_threshold,
+                                                               mod_settings.capacitance_retention_special_threshold,
+                                                               mod_settings.capacitance_retention_boss_threshold)
+                                if current_percentage < min_threshold then
+                                    skip = true
+                                end
+                            end
+                        end
+                        
+                        if not skip then
+                            active_tags[tag_name] = {
+                                min_range = class_settings.min_range,
+                                max_range = class_settings.max_range,
+                                tag_context = tag_context,
+                                class_settings = class_settings,
+                                is_execution_order_priority = is_execution_order_priority,
+                                marked_tag = is_cooldown_ready and nil or marked_tag,
+                            }
+                            has_any_active = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local consolidated_results = nil
+    if has_any_active then
+        consolidated_results = mod:find_target_units_consolidated(active_tags, t)
+    end
+
     local any_delay = false
     -- calculate cooldown and delay for all tags
     for i = 1, #TAG_LIST do
@@ -512,11 +583,11 @@ local function auto_mark(dt, t, fixed_frame)
         return
     end
 
-    -- three kinds of tag to mark
-    local marked = auto_mark_by_tag(COMPANION_TAG_NAME, t, fixed_frame)
-        or auto_mark_by_tag(SERVO_SKULL_TAG_NAME, t, fixed_frame)
-        or auto_mark_by_tag(VETERAN_TAG_NAME, t, fixed_frame)
-        or auto_mark_by_tag(ENEMY_TAG_NAME, t, fixed_frame)
+    -- four kinds of tag to mark
+    local marked = auto_mark_by_tag(COMPANION_TAG_NAME, t, fixed_frame, consolidated_results and consolidated_results[COMPANION_TAG_NAME])
+        or auto_mark_by_tag(SERVO_SKULL_TAG_NAME, t, fixed_frame, consolidated_results and consolidated_results[SERVO_SKULL_TAG_NAME])
+        or auto_mark_by_tag(VETERAN_TAG_NAME, t, fixed_frame, consolidated_results and consolidated_results[VETERAN_TAG_NAME])
+        or auto_mark_by_tag(ENEMY_TAG_NAME, t, fixed_frame, consolidated_results and consolidated_results[ENEMY_TAG_NAME])
 
     if not marked then
         -- Set a small interval even if no target was found to avoid scanning every frame

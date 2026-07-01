@@ -100,6 +100,14 @@ local localization = {
         en = "How much time before the Noospheric Command effect expires should a re-mark be attempted.",
         ["zh-cn"] = "在星语指令效果到期前多久尝试重新标记。",
     },
+    max_visibility_checks = {
+        en = "Max Visibility Checks Per Frame",
+        ["zh-cn"] = "每帧最大视野检查次数",
+    },
+    max_visibility_checks_description = {
+        en = "The maximum number of line-of-sight raycasts performed per frame to find new targets. Lower values improve performance but might delay marking when many enemies are on screen.",
+        ["zh-cn"] = "每帧为了寻找新目标而进行的最大视线射线检测次数。较低的值可提高性能，但当屏幕上有许多敌人时可能会延迟标记。",
+    },
     -- arbites settings
     adamant_settings = {
         en = "Arbites Settings",
@@ -129,18 +137,17 @@ local localization = {
         "Arbites Cyber-Mastiff auto-mark prioritizes enemies chosen by Execution Order.\nSwitches target if your current marked target is not chosen by Execution Order, but your aimed target is.",
         ["zh-cn"] = "遵从处决指令的选择，法务官智能獒犬自动标记将优先标记已被处决指令选中的敌人。\n当已标记的敌人没有被处决指令选中，而正在瞄准的敌人被处决指令选中时，将切换至瞄准的目标。",
     },
-    companion_range_limitation = {
-        en = "Range Limitation",
-        ["zh-cn"] = "范围限制",
+    companion_min_range = {
+        en = "Min Range",
+        ["zh-cn"] = "最小范围",
     },
-    companion_range_limitation_description = {
-        en =
-            "Restricts the maximum distance between your " ..
-            highlight("Cyber-Mastiff") .. " and a target that can be marked by the auto-mark.\n" ..
-            "Set to " .. highlight("0") .. " to disable.",
-        ["zh-cn"] = "限制自动标记系统可标记的目标与你的" ..
-            highlight("智能獒犬") .. "之间的最大距离。\n" ..
-            "设置为" .. highlight("0") .. "禁用。",
+    companion_max_range = {
+        en = "Max Range",
+        ["zh-cn"] = "最大范围",
+    },
+    companion_max_range_description = {
+        en = "Unit: Meters",
+        ["zh-cn"] = "单位：米",
     },
     companion_cancel_mark = {
         en = "Auto Cancel Cyber-Mastiff Mark",
@@ -208,18 +215,17 @@ local localization = {
             "设置为" .. highlight("按一次") ..
             "时，此功能变为普通敌人标记。",
     },
-    servo_skull_range_limitation = {
-        en = "Range Limitation",
-        ["zh-cn"] = "范围限制",
+    servo_skull_min_range = {
+        en = "Min Range",
+        ["zh-cn"] = "最小范围",
     },
-    servo_skull_range_limitation_description = {
-        en =
-            "Restricts the maximum distance between your " ..
-            highlight("Servo-Skull") .. " and a target that can be marked by the auto-mark.\n" ..
-            "Set to " .. highlight("0") .. " to disable.",
-        ["zh-cn"] = "限制自动标记系统可标记的目标与你的" ..
-            highlight("伺服颅骨") .. "之间的最大距离。\n" ..
-            "设置为" .. highlight("0") .. "禁用。",
+    servo_skull_max_range = {
+        en = "Max Range",
+        ["zh-cn"] = "最大范围",
+    },
+    servo_skull_max_range_description = {
+        en = "Unit: Meters",
+        ["zh-cn"] = "单位：米",
     },
     capacitance_retention = {
         en = "Capacitance Retention",

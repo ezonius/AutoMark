@@ -246,6 +246,13 @@ local widgets = {
                 range           = { 0, 1.0 },
                 decimals_number = 2,
             },
+            {
+                setting_id      = "max_visibility_checks",
+                type            = "numeric",
+                default_value   = 2,
+                range           = { 1, 10 },
+                decimals_number = 0,
+            },
         }
     },
     {
@@ -266,10 +273,16 @@ local widgets = {
                 default_value = false,
             },
             {
-                setting_id    = "companion_range_limitation",
+                setting_id    = "companion_min_range",
                 type          = "numeric",
                 default_value = 0,
                 range         = { 0, 100 },
+            },
+            {
+                setting_id    = "companion_max_range",
+                type          = "numeric",
+                default_value = 100,
+                range         = { 1, 100 },
             },
             {
                 setting_id    = "companion_cancel_mark",
@@ -316,10 +329,16 @@ local widgets = {
                 function_name   = "servo_skull_mark",
             },
             {
-                setting_id    = "servo_skull_range_limitation",
+                setting_id    = "servo_skull_min_range",
+                type          = "numeric",
+                default_value = 0,
+                range         = { 0, 100 },
+            },
+            {
+                setting_id    = "servo_skull_max_range",
                 type          = "numeric",
                 default_value = 30,
-                range         = { 0, 100 },
+                range         = { 1, 100 },
             },
             {
                 setting_id    = "capacitance_retention",

@@ -23,6 +23,8 @@ local last_ray_origin           = nil
 local last_forward              = nil
 local last_right                = nil
 local last_up                   = nil
+local last_visibility_frame     = -1
+local last_visibility_results   = {}
 
 -- Imports
 local Breed                                 = require("scripts/utilities/breed")
@@ -42,6 +44,8 @@ local Unit_world_position       = Unit.world_position
 local PhysicsWorld_raycast      = PhysicsWorld.raycast
 local Raycast_cast              = Raycast.cast
 local ScriptUnit_extension      = ScriptUnit.extension
+local pairs                  = pairs
+local table_clear            = table.clear
 local math_abs                  = math.abs
 local math_max                  = math.max
 local math_sqrt                 = math.sqrt
@@ -75,6 +79,8 @@ function mod:reset_targeting_cache()
     last_forward = nil
     last_right = nil
     last_up = nil
+    last_visibility_frame = -1
+    table_clear(last_visibility_results)
 end
 
 function mod:init_visibility_raycast()
@@ -144,29 +150,32 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_unit_po
             return false
         end
 
-        local companion_range_limitation = mod_settings.companion_range_limitation
-        if companion_range_limitation <= 0 then
-            return true
-        end
+        local min_range = mod_settings.companion_min_range
+        local max_range = mod_settings.companion_max_range
+        if min_range > 0 or max_range < 100 then
+            -- Fallback for direct calls
+            if not target_unit_position or _G.type(target_unit_position) == "userdata" then
+                local raw_pos = target_unit and Unit_world_position(target_unit, 1)
+                target_unit_position = raw_pos and Vector3(raw_pos.x, raw_pos.y, raw_pos.z)
+            end
+            if not companion_unit_position or _G.type(companion_unit_position) == "userdata" then
+                local companion_spawner_extension = context.companion_spawner_extension
+                local companion_units = companion_spawner_extension and companion_spawner_extension:companion_units()
+                local companion_unit = companion_units and companion_units[1]
+                local raw_pos = companion_unit and Unit_world_position(companion_unit, 1)
+                companion_unit_position = raw_pos and Vector3(raw_pos.x, raw_pos.y, raw_pos.z)
+            end
 
-        -- Fallback for direct calls
-        if not target_unit_position then
-            target_unit_position = target_unit and Unit_world_position(target_unit, 1)
-        end
-        if not companion_unit_position then
-            local companion_spawner_extension = context.companion_spawner_extension
-            local companion_units = companion_spawner_extension and companion_spawner_extension:companion_units()
-            local companion_unit = companion_units and companion_units[1]
-            companion_unit_position = companion_unit and Unit_world_position(companion_unit, 1)
-        end
+            if not companion_unit_position or not target_unit_position then
+                return false
+            end
 
-        if not companion_unit_position or not target_unit_position then
-            return false
+            local distance_sq = Vector3_distance_squared(companion_unit_position, target_unit_position)
+            if distance_sq < min_range * min_range or distance_sq > max_range * max_range then
+                return false
+            end
         end
-
-        if Vector3_distance_squared(companion_unit_position, target_unit_position) < companion_range_limitation * companion_range_limitation then
-            return true
-        end
+        return true
     elseif tag_name == VETERAN_TAG_NAME then
         local metadata = unit_metadata_cache[target_unit]
         local target_buff_extension = metadata and metadata.buff_extension
@@ -222,23 +231,27 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_unit_po
             end
         end
 
-        local servo_skull_range_limitation = mod_settings.servo_skull_range_limitation
-        if servo_skull_range_limitation > 0 then
+        local min_range = mod_settings.servo_skull_min_range
+        local max_range = mod_settings.servo_skull_max_range
+        if min_range > 0 or max_range < 100 then
             -- Fallback for direct calls
-            if not target_unit_position then
-                target_unit_position = target_unit and Unit_world_position(target_unit, 1)
+            if not target_unit_position or _G.type(target_unit_position) == "userdata" then
+                local raw_pos = target_unit and Unit_world_position(target_unit, 1)
+                target_unit_position = raw_pos and Vector3(raw_pos.x, raw_pos.y, raw_pos.z)
             end
-            if not companion_unit_position then
+            if not companion_unit_position or _G.type(companion_unit_position) == "userdata" then
                 local companion_spawner_extension = context.companion_spawner_extension
                 local servo_skull_unit = companion_spawner_extension and companion_spawner_extension:spawned_unit_lookup(special_rules.cryptic_servo_skull_hack)
-                companion_unit_position = Unit_alive(servo_skull_unit) and Unit_world_position(servo_skull_unit, 1)
+                local raw_pos = Unit_alive(servo_skull_unit) and Unit_world_position(servo_skull_unit, 1)
+                companion_unit_position = raw_pos and Vector3(raw_pos.x, raw_pos.y, raw_pos.z)
             end
 
             if not companion_unit_position or not target_unit_position then
                 return false
             end
 
-            if Vector3_distance_squared(companion_unit_position, target_unit_position) > servo_skull_range_limitation * servo_skull_range_limitation then
+            local distance_sq = Vector3_distance_squared(companion_unit_position, target_unit_position)
+            if distance_sq < min_range * min_range or distance_sq > max_range * max_range then
                 return false
             end
         end
@@ -301,15 +314,51 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_unit_po
     return false
 end
 
-local function is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq)
+local function is_unit_on_screen(unit)
+    local hud = Managers.ui:get_hud()
+    local world_markers = hud and hud:element("HudElementWorldMarkers")
+    if not world_markers then return true end
+
+    local camera = world_markers:_get_camera()
+    if not camera then return true end
+
+    local raw_pos = Unit_world_position(unit, 1)
+    local pos = Vector3(raw_pos.x, raw_pos.y, raw_pos.z)
+    return Camera.inside_frustum(camera, pos)
+end
+
+local function get_dynamic_cache_duration(dist_sq)
+    local dist = math_sqrt(dist_sq)
+    if dist < 50 then
+        return mod_settings.visibility_cache_duration
+    elseif dist < 70 then
+        return mod_settings.visibility_cache_duration * 1.5
+    else
+        return mod_settings.visibility_cache_duration * 2.0
+    end
+end
+
+local function is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq, fixed_frame)
     if not visibility_raycast_object then
         return false
     end
 
+    if fixed_frame == last_visibility_frame then
+        local result = last_visibility_results[hit_unit]
+        if result ~= nil then
+            return result
+        end
+    else
+        last_visibility_frame = fixed_frame
+        table_clear(last_visibility_results)
+    end
+
     local cached_visibility = visibility_cache[hit_unit]
     local last_check_t = visibility_check_frame[hit_unit]
-    -- Cache for selected duration to cover the scan interval
-    if cached_visibility ~= nil and t - last_check_t < mod_settings.visibility_cache_duration then
+    
+    local cache_duration = get_dynamic_cache_duration(dist_sq)
+    if cached_visibility ~= nil and t - last_check_t < cache_duration then
+        last_visibility_results[hit_unit] = cached_visibility
         return cached_visibility
     end
 
@@ -323,9 +372,11 @@ local function is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, d
         visibility_raycast_object, ray_origin,
         ray_to_target / ray_length, ray_length
     )
-    visibility_cache[hit_unit] = not hit
+    local is_visible = not hit
+    visibility_cache[hit_unit] = is_visible
     visibility_check_frame[hit_unit] = t
-    return not hit
+    last_visibility_results[hit_unit] = is_visible
+    return is_visible
 end
 
 function mod:is_servo_skull_target_visible(target_unit, t)
@@ -359,8 +410,10 @@ function mod:is_servo_skull_target_visible(target_unit, t)
     end
 
     local breed_data = metadata.breed_data
-    local ray_origin = Unit_world_position(servo_skull_unit, 1)
-    local target_pos = Unit_world_position(target_unit, 1) + Vector3(0, 0, Breed_height(target_unit, breed_data) * 0.5)
+    local raw_ray_origin = Unit_world_position(servo_skull_unit, 1)
+    local ray_origin = Vector3(raw_ray_origin.x, raw_ray_origin.y, raw_ray_origin.z)
+    local raw_target_pos = Unit_world_position(target_unit, 1)
+    local target_pos = Vector3(raw_target_pos.x, raw_target_pos.y, raw_target_pos.z) + Vector3(0, 0, Breed_height(target_unit, breed_data) * 0.5)
     local ray_to_target = target_pos - ray_origin
     local ray_length = Vector3_length(ray_to_target)
 
@@ -467,23 +520,28 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
     -- Pre-calculate context data for is_target_valid
     local companion_unit_position = nil
     if tag_name == COMPANION_TAG_NAME then
-        local companion_range_limitation = mod_settings.companion_range_limitation
-        if companion_range_limitation > 0 then
+        local min_range = mod_settings.companion_min_range
+        local max_range = mod_settings.companion_max_range
+        if min_range > 0 or max_range < 100 then
             local companion_spawner_extension = context.companion_spawner_extension
             local companion_units = companion_spawner_extension and companion_spawner_extension:companion_units()
             local companion_unit = companion_units and companion_units[1]
-            companion_unit_position = companion_unit and Unit_world_position(companion_unit, 1)
+            local raw_pos = companion_unit and Unit_world_position(companion_unit, 1)
+            companion_unit_position = raw_pos and Vector3(raw_pos.x, raw_pos.y, raw_pos.z)
         end
     elseif tag_name == SERVO_SKULL_TAG_NAME then
-        local servo_skull_range_limitation = mod_settings.servo_skull_range_limitation
-        if servo_skull_range_limitation > 0 then
+        local min_range = mod_settings.servo_skull_min_range
+        local max_range = mod_settings.servo_skull_max_range
+        if min_range > 0 or max_range < 100 then
             local companion_spawner_extension = context.companion_spawner_extension
             local servo_skull_unit = companion_spawner_extension and companion_spawner_extension:spawned_unit_lookup(special_rules.cryptic_servo_skull_hack)
-            companion_unit_position = Unit_alive(servo_skull_unit) and Unit_world_position(servo_skull_unit, 1)
+            local raw_pos = Unit_alive(servo_skull_unit) and Unit_world_position(servo_skull_unit, 1)
+            companion_unit_position = raw_pos and Vector3(raw_pos.x, raw_pos.y, raw_pos.z)
         end
     end
     local talent_resource_component = (tag_name == VETERAN_TAG_NAME) and context.talent_resource_component or nil
 
+    local visibility_check_count = 0
     local canceled_unit = tag_context and tag_context.canceled_unit
     local breed_priorities = class_settings and class_settings.breed_priorities or EMPTY_TABLE
     local execution_order_units = mark_context.execution_order_units
@@ -519,6 +577,9 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
         end
 
         local hit_position = hit[INDEX_POSITION]
+        if hit_position then
+            hit_position = Vector3(hit_position.x, hit_position.y, hit_position.z)
+        end
         local hit_actor = hit[INDEX_ACTOR]
         if not hit_actor then
             goto continue_loop
@@ -584,13 +645,14 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
 
         -- Frame-specific unit data
         local half_width, half_height, hit_unit_center_pos
-        if metadata.last_frame == fixed_frame then
+        if metadata.last_frame == fixed_frame and metadata.hit_unit_center_pos and _G.type(metadata.hit_unit_center_pos) ~= "userdata" then
             half_width = metadata.half_width
             half_height = metadata.half_height
             hit_unit_center_pos = metadata.hit_unit_center_pos
         else
             local hit_unit_pose, _ = Unit_box(hit_unit, true)
-            hit_unit_center_pos, _ = Actor_world_bounds(hit_actor)
+            local raw_hit_unit_center_pos, _ = Actor_world_bounds(hit_actor)
+            hit_unit_center_pos = Vector3(raw_hit_unit_center_pos.x, raw_hit_unit_center_pos.y, raw_hit_unit_center_pos.z)
             local object_right = Matrix4x4_right(hit_unit_pose)
             local object_forward = Matrix4x4_forward(hit_unit_pose)
             local world_extents_right = object_right * metadata.half_extent_right
@@ -627,8 +689,19 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
         end
 
         if type == "auto" then
+            -- Performance Limit: Only perform a set number of visibility checks per frame
+            local max_visibility_checks = mod_settings.max_visibility_checks or 2
+            if visibility_check_count >= max_visibility_checks then
+                goto continue_loop
+            end
+
+            if not is_unit_on_screen(hit_unit) then
+                goto continue_loop
+            end
+
             -- Visibility check is expensive, do it last
-            if not is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq) then
+            visibility_check_count = visibility_check_count + 1
+            if not is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq, fixed_frame) then
                 goto continue_loop
             end
 
@@ -656,7 +729,7 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
                 goto continue_loop
             end
 
-            if not is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq) then
+            if not is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq, fixed_frame) then
                 goto continue_loop
             end
 
@@ -681,6 +754,232 @@ end
 
 function mod:is_target_valid(tag_name, hit_unit_tag, hit_unit, hit_unit_center_pos, companion_unit_position, talent_resource_component)
     return is_target_valid(tag_name, hit_unit_tag, hit_unit, hit_unit_center_pos, companion_unit_position, talent_resource_component)
+end
+
+function mod:find_target_units_consolidated(active_tags, t)
+    local player = context.player
+    local player_unit = player and player.player_unit
+    local smart_targeting_extension = context.smart_targeting_extension
+    local smart_tag_system = context.smart_tag_system
+    if not player_unit or not smart_targeting_extension or not smart_tag_system then
+        return nil
+    end
+
+    local fixed_frame = smart_targeting_extension._latest_fixed_frame
+    local ray_origin, forward, right, up
+    local hits, num_hits
+
+    local max_range = 0
+    for tag_name, data in pairs(active_tags) do
+        max_range = math_max(max_range, data.max_range)
+    end
+
+    if fixed_frame == last_raycast_frame then
+        ray_origin = last_ray_origin
+        forward = last_forward
+        right = last_right
+        up = last_up
+        hits = last_raycast_hits
+        num_hits = last_raycast_num_hits
+    else
+        ray_origin, forward, right, up = smart_targeting_extension:_targeting_parameters()
+        hits, num_hits = PhysicsWorld_raycast(smart_targeting_extension._physics_world, ray_origin, forward, max_range,
+            "all", "collision_filter", COLLISION_FILTER)
+
+        last_raycast_frame = fixed_frame
+        last_ray_origin = ray_origin
+        last_forward = forward
+        last_right = right
+        last_up = up
+        last_raycast_hits = hits
+        last_raycast_num_hits = num_hits
+    end
+
+    if num_hits <= 0 then
+        return nil
+    end
+
+    local tag_params = {}
+    for tag_name, data in pairs(active_tags) do
+        local params = {
+            name = tag_name,
+            min_range = data.min_range,
+            max_range = data.max_range,
+            tag_context = data.tag_context,
+            class_settings = data.class_settings,
+            is_execution_order_priority = data.is_execution_order_priority,
+            marked_tag = data.marked_tag,
+            marked_unit = data.marked_tag and data.marked_tag._target_unit,
+            best_unit = nil,
+            best_unit_tag = nil,
+            best_unit_priority = -math_huge,
+            best_unit_marked_by_execution_order = false,
+        }
+        
+        if params.marked_unit and Unit_alive(params.marked_unit) then
+            params.best_unit = params.marked_unit
+            local unit_data_extension = ScriptUnit_extension(params.best_unit, "unit_data_system")
+            local breed_data = unit_data_extension and unit_data_extension._breed
+            params.best_unit_priority = get_breed_priority(params.best_unit, breed_data, data.class_settings.breed_priorities, breed_data and breed_data.name .. "_passive")
+            params.best_unit_marked_by_execution_order = not not mark_context.execution_order_units[params.best_unit]
+        end
+
+        if tag_name == COMPANION_TAG_NAME then
+            local min_range = mod_settings.companion_min_range
+            local max_range = mod_settings.companion_max_range
+            if min_range > 0 or max_range < 100 then
+                local companion_spawner_extension = context.companion_spawner_extension
+                local companion_units = companion_spawner_extension and companion_spawner_extension:companion_units()
+                local companion_unit = companion_units and companion_units[1]
+                params.companion_unit_position = companion_unit and Unit_world_position(companion_unit, 1)
+            end
+        elseif tag_name == SERVO_SKULL_TAG_NAME then
+            local min_range = mod_settings.servo_skull_min_range
+            local max_range = mod_settings.servo_skull_max_range
+            if min_range > 0 or max_range < 100 then
+                local companion_spawner_extension = context.companion_spawner_extension
+                local servo_skull_unit = companion_spawner_extension and companion_spawner_extension:spawned_unit_lookup(special_rules.cryptic_servo_skull_hack)
+                params.companion_unit_position = Unit_alive(servo_skull_unit) and Unit_world_position(servo_skull_unit, 1)
+            end
+        elseif tag_name == VETERAN_TAG_NAME then
+            params.talent_resource_component = context.talent_resource_component
+        end
+
+        tag_params[#tag_params + 1] = params
+    end
+
+    local visibility_check_count = 0
+    local execution_order_units = mark_context.execution_order_units
+
+    for i = 1, num_hits do
+        local hit = hits[i]
+        if not hit then goto continue_loop end
+
+        local hit_distance = hit[INDEX_DISTANCE]
+        if hit_distance < 0.1 then goto continue_loop end
+
+        local hit_actor = hit[INDEX_ACTOR]
+        if not hit_actor then goto continue_loop end
+
+        local success, hit_unit = pcall(Actor_unit, hit_actor)
+        if not success or not hit_unit or hit_unit == player_unit or not HEALTH_ALIVE[hit_unit] then
+            goto continue_loop
+        end
+
+        local metadata = unit_metadata_cache[hit_unit]
+        if not metadata then
+            local unit_data_extension = ScriptUnit_extension(hit_unit, "unit_data_system")
+            local breed_data = unit_data_extension and unit_data_extension._breed
+            local breed_name = breed_data and breed_data.name
+            metadata = {
+                breed_data = breed_data,
+                breed_name = breed_name,
+                breed_name_passive = breed_name and breed_name .. "_passive",
+                is_taggable = not not (breed_data and breed_data.smart_tag_target_type == "breed"),
+                half_extent_right = breed_data and (breed_data.half_extent_right or 0.3) or 0.3,
+                half_extent_forward = breed_data and (breed_data.half_extent_forward or 0.3) or 0.3,
+            }
+            unit_metadata_cache[hit_unit] = metadata
+        end
+        unit_metadata_cache_frame[hit_unit] = fixed_frame
+        if not metadata.is_taggable then goto continue_loop end
+
+        local half_width, hit_unit_center_pos
+        if metadata.last_frame == fixed_frame and metadata.hit_unit_center_pos and _G.type(metadata.hit_unit_center_pos) ~= "userdata" then
+            half_width = metadata.half_width
+            hit_unit_center_pos = metadata.hit_unit_center_pos
+        else
+            local hit_unit_pose, _ = Unit_box(hit_unit, true)
+            local raw_hit_unit_center_pos, _ = Actor_world_bounds(hit_actor)
+            hit_unit_center_pos = Vector3(raw_hit_unit_center_pos.x, raw_hit_unit_center_pos.y, raw_hit_unit_center_pos.z)
+            local object_right = Matrix4x4_right(hit_unit_pose)
+            local object_forward = Matrix4x4_forward(hit_unit_pose)
+            local world_extents_right = object_right * metadata.half_extent_right
+            local world_extents_forward = object_forward * metadata.half_extent_forward
+            half_width = math_max(
+                math_abs(Vector3_dot(right, world_extents_right + world_extents_forward)),
+                math_abs(Vector3_dot(right, world_extents_right - world_extents_forward))
+            )
+            metadata.last_frame = fixed_frame
+            metadata.half_width = half_width
+            metadata.hit_unit_center_pos = hit_unit_center_pos
+        end
+
+        local dist_sq = Vector3_distance_squared(hit_unit_center_pos, ray_origin)
+        local hit_unit_tag = smart_tag_system:unit_tag(hit_unit)
+        local hit_unit_marked_by_execution_order = not not execution_order_units[hit_unit]
+        local is_on_screen = nil
+
+        for j = 1, #tag_params do
+            local p = tag_params[j]
+            if hit_unit == p.marked_unit or hit_unit == (p.tag_context and p.tag_context.canceled_unit) then
+                goto next_tag
+            end
+
+            local min_r = p.min_range + half_width
+            local max_r = p.max_range + half_width
+            if dist_sq < min_r * min_r or dist_sq > max_r * max_r then
+                goto next_tag
+            end
+
+            local breed_priorities = p.class_settings.breed_priorities or EMPTY_TABLE
+            local hit_unit_priority = get_breed_priority(hit_unit, metadata.breed_data, breed_priorities, metadata.breed_name_passive)
+            if hit_unit_priority <= 0 or not is_breed_valid(metadata.breed_data, p.class_settings) then
+                goto next_tag
+            end
+
+            if p.is_execution_order_priority then
+                if hit_unit_marked_by_execution_order == p.best_unit_marked_by_execution_order then
+                    if hit_unit_priority <= p.best_unit_priority then goto next_tag end
+                elseif p.best_unit_marked_by_execution_order then
+                    goto next_tag
+                end
+            else
+                if hit_unit_priority <= p.best_unit_priority then goto next_tag end
+            end
+
+            if not is_target_valid(p.name, hit_unit_tag, hit_unit, hit_unit_center_pos, p.companion_unit_position, p.talent_resource_component) then
+                goto next_tag
+            end
+
+            local max_visibility_checks = mod_settings.max_visibility_checks or 2
+            if visibility_check_count >= max_visibility_checks then
+                goto next_tag
+            end
+
+            if is_on_screen == nil then is_on_screen = is_unit_on_screen(hit_unit) end
+            if not is_on_screen then goto next_tag end
+
+            local is_visible
+            if p.name == SERVO_SKULL_TAG_NAME then
+                is_visible = mod:is_servo_skull_target_visible(hit_unit, t)
+            else
+                visibility_check_count = visibility_check_count + 1
+                is_visible = is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq, fixed_frame)
+            end
+
+            if is_visible then
+                p.best_unit = hit_unit
+                p.best_unit_tag = hit_unit_tag
+                p.best_unit_priority = hit_unit_priority
+                p.best_unit_marked_by_execution_order = hit_unit_marked_by_execution_order
+            end
+
+            ::next_tag::
+        end
+
+        ::continue_loop::
+    end
+
+    local results = {}
+    for j = 1, #tag_params do
+        local p = tag_params[j]
+        if p.best_unit and p.best_unit ~= p.marked_unit then
+            results[p.name] = { unit = p.best_unit, tag = p.best_unit_tag }
+        end
+    end
+
+    return next(results) and results or nil
 end
 
 mod:hook_safe(CLASS.PrecisionTargetFinder, "init",
