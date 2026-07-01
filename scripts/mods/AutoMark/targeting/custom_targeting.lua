@@ -222,6 +222,27 @@ local function is_target_valid(tag_name, target_tag, target_unit, target_unit_po
             end
         end
 
+        local servo_skull_range_limitation = mod_settings.servo_skull_range_limitation
+        if servo_skull_range_limitation > 0 then
+            -- Fallback for direct calls
+            if not target_unit_position then
+                target_unit_position = target_unit and Unit_world_position(target_unit, 1)
+            end
+            if not companion_unit_position then
+                local companion_spawner_extension = context.companion_spawner_extension
+                local servo_skull_unit = companion_spawner_extension and companion_spawner_extension:spawned_unit_lookup(special_rules.cryptic_servo_skull_hack)
+                companion_unit_position = Unit_alive(servo_skull_unit) and Unit_world_position(servo_skull_unit, 1)
+            end
+
+            if not companion_unit_position or not target_unit_position then
+                return false
+            end
+
+            if Vector3_distance_squared(companion_unit_position, target_unit_position) > servo_skull_range_limitation * servo_skull_range_limitation then
+                return false
+            end
+        end
+
         if not mod_settings.capacitance_retention or not context.has_noospheric_command then
             return true
         end
@@ -452,6 +473,13 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
             local companion_units = companion_spawner_extension and companion_spawner_extension:companion_units()
             local companion_unit = companion_units and companion_units[1]
             companion_unit_position = companion_unit and Unit_world_position(companion_unit, 1)
+        end
+    elseif tag_name == SERVO_SKULL_TAG_NAME then
+        local servo_skull_range_limitation = mod_settings.servo_skull_range_limitation
+        if servo_skull_range_limitation > 0 then
+            local companion_spawner_extension = context.companion_spawner_extension
+            local servo_skull_unit = companion_spawner_extension and companion_spawner_extension:spawned_unit_lookup(special_rules.cryptic_servo_skull_hack)
+            companion_unit_position = Unit_alive(servo_skull_unit) and Unit_world_position(servo_skull_unit, 1)
         end
     end
     local talent_resource_component = (tag_name == VETERAN_TAG_NAME) and context.talent_resource_component or nil

@@ -46,6 +46,7 @@ local mod_settings           = {
     companion_health_threshold      = mod:get("companion_health_threshold") or 0,
     companion_time_threshold        = mod:get("companion_time_threshold") or 0,
     servo_skull_mark_keybind        = mod:get("servo_skull_mark_keybind") or {},
+    servo_skull_range_limitation    = mod:get("servo_skull_range_limitation") or 30,
     capacitance_retention           = mod:get("capacitance_retention") or false,
     capacitance_retention_elite_threshold   = mod:get("capacitance_retention_elite_threshold") or 0,
     capacitance_retention_special_threshold = mod:get("capacitance_retention_special_threshold") or 0,
@@ -421,6 +422,29 @@ local function auto_mark_by_tag(tag_name, t, fixed_frame)
 
     local target_unit, target_tag
     if is_cooldown_ready then
+        if tag_name == SERVO_SKULL_TAG_NAME and mod_settings.capacitance_retention and context.has_noospheric_command then
+            local player_ability_extension = context.player_ability_extension
+            if player_ability_extension then
+                local max_ability_charges = player_ability_extension:max_ability_charges("combat_ability")
+                local remaining_ability_charges = player_ability_extension:remaining_ability_charges("combat_ability")
+                local max_ability_cooldown = player_ability_extension:max_ability_cooldown("combat_ability")
+                local remaining_ability_cooldown = player_ability_extension:remaining_ability_cooldown("combat_ability")
+                local current_capacitance = remaining_ability_charges
+                if remaining_ability_charges < max_ability_charges and max_ability_cooldown > 0 then
+                    current_capacitance = current_capacitance + math.max(0, (max_ability_cooldown - remaining_ability_cooldown) / max_ability_cooldown)
+                end
+                local current_percentage = max_ability_charges > 0 and (current_capacitance / max_ability_charges * 100) or 100
+
+                local min_threshold = math.max(mod_settings.capacitance_retention_elite_threshold,
+                                               mod_settings.capacitance_retention_special_threshold,
+                                               mod_settings.capacitance_retention_boss_threshold)
+
+                if current_percentage < min_threshold then
+                    return false
+                end
+            end
+        end
+
         target_unit, target_tag = mod:find_target_unit_custom("auto", class_settings.min_range, class_settings.max_range,
             tag_name, tag_context, class_settings, true, is_execution_order_priority, nil, t)
     elseif is_priority_switch or is_execution_order_priority then

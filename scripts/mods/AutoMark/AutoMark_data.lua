@@ -316,6 +316,12 @@ local widgets = {
                 function_name   = "servo_skull_mark",
             },
             {
+                setting_id    = "servo_skull_range_limitation",
+                type          = "numeric",
+                default_value = 30,
+                range         = { 0, 100 },
+            },
+            {
                 setting_id    = "capacitance_retention",
                 type          = "checkbox",
                 default_value = false,

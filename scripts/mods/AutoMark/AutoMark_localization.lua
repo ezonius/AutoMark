@@ -208,6 +208,19 @@ local localization = {
             "设置为" .. highlight("按一次") ..
             "时，此功能变为普通敌人标记。",
     },
+    servo_skull_range_limitation = {
+        en = "Range Limitation",
+        ["zh-cn"] = "范围限制",
+    },
+    servo_skull_range_limitation_description = {
+        en =
+            "Restricts the maximum distance between your " ..
+            highlight("Servo-Skull") .. " and a target that can be marked by the auto-mark.\n" ..
+            "Set to " .. highlight("0") .. " to disable.",
+        ["zh-cn"] = "限制自动标记系统可标记的目标与你的" ..
+            highlight("伺服颅骨") .. "之间的最大距离。\n" ..
+            "设置为" .. highlight("0") .. "禁用。",
+    },
     capacitance_retention = {
         en = "Capacitance Retention",
         ["zh-cn"] = "电容保留",
