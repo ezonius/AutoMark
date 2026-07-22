@@ -105,6 +105,7 @@ local function get_breed_priority(target_unit, breed_data, breed_priorities, bre
         return 0
     end
 
+    local priority
     local tags = breed_data.tags
     if tags and tags.witch then
         local gsm = Managers.state.game_session
@@ -113,13 +114,26 @@ local function get_breed_priority(target_unit, breed_data, breed_priorities, bre
         local game_object_id = usm and usm:game_object_id(target_unit)
         local is_aggroed = MinionPerception.target_unit(game_session, game_object_id)
         if is_aggroed then
-            return breed_priorities[breed_name] or 0
+            priority = breed_priorities[breed_name] or 0
         else
-            return breed_priorities[breed_name_passive] or 0
+            priority = breed_priorities[breed_name_passive] or 0
         end
     else
-        return breed_priorities[breed_name] or 0
+        priority = breed_priorities[breed_name] or 0
     end
+
+    if priority == 11 then
+        local buff_extension = ScriptUnit_extension(target_unit, "buff_system")
+        if buff_extension then
+            local rending_debuff = buff_extension._stacking_buffs["rending_debuff"]
+            if rending_debuff and rending_debuff:stack_count() > 0 then
+                return 1
+            end
+        end
+        return 0
+    end
+
+    return priority
 end
 
 -- Check if Target Unit's Breed is Valid for Auto-Mark

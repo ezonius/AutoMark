@@ -491,6 +491,10 @@ local localization = {
         en = "Priority 1 (Lowest)",
         ["zh-cn"] = "优先级 1 (最低)",
     },
+    priority_1_rending = {
+        en = "Priority 1 (Rending)",
+        ["zh-cn"] = "优先级 1 (撕裂)",
+    },
     priority_2 = {
         en = "Priority 2",
         ["zh-cn"] = "优先级 2",
@@ -523,7 +527,10 @@ local localization = {
         en = "Priority 9",
         ["zh-cn"] = "优先级 9",
     },
-    priority_lowest = {
+    priority_10 = {
+        en = "Priority 10",
+        ["zh-cn"] = "优先级 10",
+    },    priority_lowest = {
         en = "Off",
         ["zh-cn"] = "关闭",
     },
