@@ -57,6 +57,7 @@ local Vector3_length            = Vector3.length
 local Vector3_distance_squared  = Vector3.distance_squared
 local Matrix4x4_right           = Matrix4x4.right
 local Matrix4x4_forward         = Matrix4x4.forward
+local table_sort                = table.sort
 
 -- Constants
 local INDEX_POSITION            = 1
@@ -490,6 +491,11 @@ function mod:is_noospheric_command_boost_breed_valid(target_unit)
 end
 
 local BROADPHASE_RESULTS = {}
+local CANDIDATES = {}
+
+local function sort_by_priority_desc(a, b)
+    return a.priority > b.priority
+end
 
 local function find_servo_skull_target(tag_name, class_settings, tag_context, t, is_execution_order_priority, marked_tag)
     local player = context.player
@@ -528,16 +534,12 @@ local function find_servo_skull_target(tag_name, class_settings, tag_context, t,
     local smart_tag_system = context.smart_tag_system
     local breed_priorities = class_settings.breed_priorities or EMPTY_TABLE
 
-    local best_unit = nil
-    local best_unit_tag = nil
-    local best_unit_priority = -math_huge
-
     local marked_unit = marked_tag and marked_tag._target_unit
+    local base_priority = 0
     if marked_unit and HEALTH_ALIVE[marked_unit] then
-        best_unit = marked_unit
-        local unit_data_extension = ScriptUnit_extension(best_unit, "unit_data_system")
+        local unit_data_extension = ScriptUnit_extension(marked_unit, "unit_data_system")
         local breed_data = unit_data_extension and unit_data_extension._breed
-        best_unit_priority = get_breed_priority(best_unit, breed_data, breed_priorities, breed_data and breed_data.name .. "_passive")
+        base_priority = get_breed_priority(marked_unit, breed_data, breed_priorities, breed_data and breed_data.name .. "_passive")
     end
 
     local canceled_unit = tag_context and tag_context.canceled_unit
@@ -546,6 +548,9 @@ local function find_servo_skull_target(tag_name, class_settings, tag_context, t,
     local gsm = state.game_session
     local usm = state.unit_spawner
     local game_session = gsm and gsm:game_session()
+
+    local min_dist = class_settings.min_range
+    local count = 0
 
     for i = 1, num_results do
         local hit_unit = BROADPHASE_RESULTS[i]
@@ -564,13 +569,12 @@ local function find_servo_skull_target(tag_name, class_settings, tag_context, t,
         end
 
         local priority = get_breed_priority(hit_unit, breed_data, breed_priorities, breed_data.name .. "_passive")
-        if priority <= 0 or priority <= best_unit_priority then
+        if priority <= 0 or priority <= base_priority then
             goto next_broadphase
         end
 
         local raw_pos = Unit_world_position(hit_unit, 1)
         local dist_sq = Vector3_distance_squared(servo_position, raw_pos)
-        local min_dist = class_settings.min_range
         if dist_sq < min_dist * min_dist or dist_sq > radius * radius then
             goto next_broadphase
         end
@@ -583,23 +587,37 @@ local function find_servo_skull_target(tag_name, class_settings, tag_context, t,
             goto next_broadphase
         end
 
-        local hit_unit_tag = smart_tag_system:unit_tag(hit_unit)
-        if not is_target_valid(tag_name, hit_unit_tag, hit_unit, nil, nil, nil) then
-            goto next_broadphase
-        end
-
-        if not mod:is_servo_skull_target_visible(hit_unit, t) then
-            goto next_broadphase
-        end
-
-        best_unit = hit_unit
-        best_unit_tag = hit_unit_tag
-        best_unit_priority = priority
+        count = count + 1
+        CANDIDATES[count] = CANDIDATES[count] or {}
+        local entry = CANDIDATES[count]
+        entry.unit = hit_unit
+        entry.priority = priority
 
         ::next_broadphase::
     end
 
-    return best_unit, best_unit_tag
+    if count == 0 then
+        return nil
+    end
+
+    -- Clear stale entries from previous cycle
+    for i = count + 1, #CANDIDATES do
+        CANDIDATES[i] = nil
+    end
+
+    table_sort(CANDIDATES, sort_by_priority_desc)
+
+    for i = 1, count do
+        local entry = CANDIDATES[i]
+        local hit_unit = entry.unit
+        local hit_unit_tag = smart_tag_system:unit_tag(hit_unit)
+        if is_target_valid(tag_name, hit_unit_tag, hit_unit, nil, nil, nil)
+            and mod:is_servo_skull_target_visible(hit_unit, t) then
+            return hit_unit, hit_unit_tag
+        end
+    end
+
+    return nil
 end
 
 function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_context, class_settings, use_filter,
