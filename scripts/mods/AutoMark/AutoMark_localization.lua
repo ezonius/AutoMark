@@ -227,6 +227,14 @@ local localization = {
         en = "Unit: Meters",
         ["zh-cn"] = "单位：米",
     },
+    servo_skull_line_of_sight = {
+        en = "Servo-Skull Line of Sight",
+        ["zh-cn"] = "伺服颅骨视线",
+    },
+    servo_skull_line_of_sight_description = {
+        en = "Only require line of sight from the Servo-Skull to auto-tag targets, ignoring whether they are on-screen.",
+        ["zh-cn"] = "自动标记时仅需从伺服颅骨的视线，无需目标在屏幕内。",
+    },
     capacitance_retention = {
         en = "Capacitance Retention",
         ["zh-cn"] = "电容保留",

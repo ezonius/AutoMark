@@ -703,20 +703,26 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
         end
 
         if type == "auto" then
-            -- Performance Limit: Only perform a set number of visibility checks per frame
-            local max_visibility_checks = mod_settings.max_visibility_checks or 2
-            if visibility_check_count >= max_visibility_checks then
-                goto continue_loop
-            end
+            if tag_name == SERVO_SKULL_TAG_NAME and mod_settings.servo_skull_line_of_sight then
+                if not mod:is_servo_skull_target_visible(hit_unit, t) then
+                    goto continue_loop
+                end
+            else
+                -- Performance Limit: Only perform a set number of visibility checks per frame
+                local max_visibility_checks = mod_settings.max_visibility_checks or 2
+                if visibility_check_count >= max_visibility_checks then
+                    goto continue_loop
+                end
 
-            if not is_unit_on_screen(hit_unit) then
-                goto continue_loop
-            end
+                if not is_unit_on_screen(hit_unit) then
+                    goto continue_loop
+                end
 
-            -- Visibility check is expensive, do it last
-            visibility_check_count = visibility_check_count + 1
-            if not is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq, fixed_frame) then
-                goto continue_loop
+                -- Visibility check is expensive, do it last
+                visibility_check_count = visibility_check_count + 1
+                if not is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq, fixed_frame) then
+                    goto continue_loop
+                end
             end
 
             best_unit = hit_unit
@@ -956,18 +962,20 @@ function mod:find_target_units_consolidated(active_tags, t)
                 goto next_tag
             end
 
-            local max_visibility_checks = mod_settings.max_visibility_checks or 2
-            if visibility_check_count >= max_visibility_checks then
-                goto next_tag
-            end
-
-            if is_on_screen == nil then is_on_screen = is_unit_on_screen(hit_unit) end
-            if not is_on_screen then goto next_tag end
-
             local is_visible
             if p.name == SERVO_SKULL_TAG_NAME then
+                if not mod_settings.servo_skull_line_of_sight then
+                    if is_on_screen == nil then is_on_screen = is_unit_on_screen(hit_unit) end
+                    if not is_on_screen then goto next_tag end
+                end
                 is_visible = mod:is_servo_skull_target_visible(hit_unit, t)
             else
+                local max_visibility_checks = mod_settings.max_visibility_checks or 2
+                if visibility_check_count >= max_visibility_checks then
+                    goto next_tag
+                end
+                if is_on_screen == nil then is_on_screen = is_unit_on_screen(hit_unit) end
+                if not is_on_screen then goto next_tag end
                 visibility_check_count = visibility_check_count + 1
                 is_visible = is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, dist_sq, fixed_frame)
             end

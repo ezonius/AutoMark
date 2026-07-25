@@ -342,6 +342,11 @@ local widgets = {
                 range         = { 1, 100 },
             },
             {
+                setting_id    = "servo_skull_line_of_sight",
+                type          = "checkbox",
+                default_value = false,
+            },
+            {
                 setting_id    = "capacitance_retention",
                 type          = "checkbox",
                 default_value = false,

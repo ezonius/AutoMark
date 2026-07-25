@@ -49,6 +49,7 @@ local mod_settings           = {
     servo_skull_mark_keybind        = mod:get("servo_skull_mark_keybind") or {},
     servo_skull_min_range       = mod:get("servo_skull_min_range") or 0,
     servo_skull_max_range       = mod:get("servo_skull_max_range") or 30,
+    servo_skull_line_of_sight    = mod:get("servo_skull_line_of_sight") or false,
     capacitance_retention           = mod:get("capacitance_retention") or false,
     capacitance_retention_elite_threshold   = mod:get("capacitance_retention_elite_threshold") or 0,
     capacitance_retention_special_threshold = mod:get("capacitance_retention_special_threshold") or 0,
