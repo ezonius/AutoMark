@@ -508,14 +508,15 @@ local function find_servo_skull_target(tag_name, class_settings, tag_context, t,
     end
     local servo_position = Unit_world_position(servo_skull_unit, 1)
 
-    local side_system = Managers.state.extension:system("side_system")
+    local extension_system = Managers.state.extension
+    local side_system = extension_system:system("side_system")
     local side = side_system.side_by_unit[player_unit]
     if not side then
         return nil
     end
     local enemy_side_names = side:relation_side_names("enemy")
 
-    local broadphase_system = Managers.state.extension:system("broadphase_system")
+    local broadphase_system = extension_system:system("broadphase_system")
     local broadphase = broadphase_system.broadphase
     local radius = class_settings.max_range
     local num_results = broadphase.query(broadphase, servo_position, radius, BROADPHASE_RESULTS, enemy_side_names)
@@ -540,6 +541,11 @@ local function find_servo_skull_target(tag_name, class_settings, tag_context, t,
     end
 
     local canceled_unit = tag_context and tag_context.canceled_unit
+
+    local state = Managers.state
+    local gsm = state.game_session
+    local usm = state.unit_spawner
+    local game_session = gsm and gsm:game_session()
 
     for i = 1, num_results do
         local hit_unit = BROADPHASE_RESULTS[i]
@@ -569,9 +575,6 @@ local function find_servo_skull_target(tag_name, class_settings, tag_context, t,
             goto next_broadphase
         end
 
-        local gsm = Managers.state.game_session
-        local usm = Managers.state.unit_spawner
-        local game_session = gsm and gsm:game_session()
         local game_object_id = usm and usm:game_object_id(hit_unit)
         if not game_session or not game_object_id then
             goto next_broadphase
