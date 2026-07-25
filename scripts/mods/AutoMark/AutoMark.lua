@@ -411,7 +411,7 @@ local function auto_mark_by_tag(tag_name, t, fixed_frame, precalculated_target)
     -- Cancel servo-skull mark if target is out of skull line-of-sight, waiting for pending boost first
     if marked_tag and tag_name == TAG_NAMES.SERVO_SKULL_TAG and not tag_context.is_manual then
         local marked_unit = marked_tag._target_unit
-        if marked_unit and Unit_alive(marked_unit) then
+        if marked_unit then
             local is_lost = not mod:is_servo_skull_target_visible(marked_unit, t)
             if is_lost then
                 local boost_is_pending = mod_settings.noospheric_command_boost
