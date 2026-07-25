@@ -569,7 +569,14 @@ local function find_servo_skull_target(tag_name, class_settings, tag_context, t,
             goto next_broadphase
         end
 
-        if not side.aggroed_minion_target_units[hit_unit] then
+        local gsm = Managers.state.game_session
+        local usm = Managers.state.unit_spawner
+        local game_session = gsm and gsm:game_session()
+        local game_object_id = usm and usm:game_object_id(hit_unit)
+        if not game_session or not game_object_id then
+            goto next_broadphase
+        end
+        if not MinionPerception.target_unit(game_session, game_object_id) then
             goto next_broadphase
         end
 
