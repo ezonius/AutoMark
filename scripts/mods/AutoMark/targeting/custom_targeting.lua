@@ -620,8 +620,236 @@ local function find_servo_skull_target(tag_name, class_settings, tag_context, t,
     return nil
 end
 
+local function find_enemy_broadphase_target(tag_name, class_settings, tag_context, t, is_execution_order_priority, marked_tag)
+    local player = context.player
+    local player_unit = player and player.player_unit
+    if not player_unit then
+        return nil
+    end
+
+    local smart_targeting_extension = context.smart_targeting_extension
+    local smart_tag_system = context.smart_tag_system
+    if not smart_targeting_extension or not smart_tag_system then
+        return nil
+    end
+
+    local player_position = Unit_world_position(player_unit, 1)
+    local broadphase_position = Vector3(player_position.x, player_position.y, player_position.z)
+
+    local extension_system = Managers.state.extension
+    local side_system = extension_system:system("side_system")
+    local side = side_system.side_by_unit[player_unit]
+    if not side then
+        return nil
+    end
+    local enemy_side_names = side:relation_side_names("enemy")
+
+    local broadphase_system = extension_system:system("broadphase_system")
+    local broadphase = broadphase_system.broadphase
+    local radius = class_settings.max_range
+    local num_results = broadphase.query(broadphase, broadphase_position, radius, BROADPHASE_RESULTS, enemy_side_names)
+
+    if num_results <= 0 then
+        return nil
+    end
+
+    local breed_priorities = class_settings.breed_priorities or EMPTY_TABLE
+
+    local marked_unit = marked_tag and marked_tag._target_unit
+    local base_priority = 0
+    if marked_unit and HEALTH_ALIVE[marked_unit] then
+        local unit_data_extension = ScriptUnit_extension(marked_unit, "unit_data_system")
+        local breed_data = unit_data_extension and unit_data_extension._breed
+        base_priority = get_breed_priority(marked_unit, breed_data, breed_priorities, breed_data and breed_data.name .. "_passive")
+    end
+
+    local canceled_unit = tag_context and tag_context.canceled_unit
+    local min_dist = class_settings.min_range
+    local count = 0
+    local fixed_frame = smart_targeting_extension._latest_fixed_frame
+    local ray_origin, forward = smart_targeting_extension:_targeting_parameters()
+
+    for i = 1, num_results do
+        local hit_unit = BROADPHASE_RESULTS[i]
+        if hit_unit == marked_unit or hit_unit == canceled_unit or hit_unit == player_unit or not HEALTH_ALIVE[hit_unit] then
+            goto next_broadphase
+        end
+
+        local unit_data_extension = ScriptUnit_extension(hit_unit, "unit_data_system")
+        local breed_data = unit_data_extension and unit_data_extension._breed
+        if not breed_data or breed_data.smart_tag_target_type ~= "breed" then
+            goto next_broadphase
+        end
+
+        if not is_breed_valid(breed_data, class_settings) then
+            goto next_broadphase
+        end
+
+        local priority = get_breed_priority(hit_unit, breed_data, breed_priorities, breed_data.name .. "_passive")
+        if priority <= 0 or priority <= base_priority then
+            goto next_broadphase
+        end
+
+        local raw_pos = Unit_world_position(hit_unit, 1)
+        local dist_sq = Vector3_distance_squared(broadphase_position, raw_pos)
+        if dist_sq < min_dist * min_dist or dist_sq > radius * radius then
+            goto next_broadphase
+        end
+
+        count = count + 1
+        CANDIDATES[count] = CANDIDATES[count] or {}
+        local entry = CANDIDATES[count]
+        entry.unit = hit_unit
+        entry.priority = priority
+
+        ::next_broadphase::
+    end
+
+    if count == 0 then
+        return nil
+    end
+
+    for i = count + 1, #CANDIDATES do
+        CANDIDATES[i] = nil
+    end
+
+    table_sort(CANDIDATES, sort_by_priority_desc)
+
+    local line_of_sight_enabled = mod_settings.enemy_line_of_sight
+
+    for i = 1, count do
+        local entry = CANDIDATES[i]
+        local hit_unit = entry.unit
+        local hit_unit_tag = smart_tag_system:unit_tag(hit_unit)
+        if is_target_valid(tag_name, hit_unit_tag, hit_unit, nil, nil, nil) then
+            if not line_of_sight_enabled then
+                return hit_unit, hit_unit_tag
+            end
+
+            local metadata = unit_metadata_cache[hit_unit]
+            local breed_data = metadata and metadata.breed_data
+            local raw_target_pos = Unit_world_position(hit_unit, 1)
+            local center_z = raw_target_pos.z + Breed_height(hit_unit, breed_data) * 0.5
+            local hit_unit_center_pos = Vector3(raw_target_pos.x, raw_target_pos.y, center_z)
+            local target_dist_sq = Vector3_distance_squared(player_position, raw_target_pos)
+            if is_target_visible(ray_origin, hit_unit_center_pos, hit_unit, t, target_dist_sq, fixed_frame) then
+                return hit_unit, hit_unit_tag
+            end
+        end
+    end
+
+    return nil
+end
+
+local function find_veteran_target(tag_name, class_settings, tag_context, t, is_execution_order_priority, marked_tag)
+    local player = context.player
+    local player_unit = player and player.player_unit
+    if not player_unit then
+        return nil
+    end
+
+    local smart_targeting_extension = context.smart_targeting_extension
+    local smart_tag_system = context.smart_tag_system
+    if not smart_targeting_extension or not smart_tag_system then
+        return nil
+    end
+
+    local ray_origin, forward, right, up = smart_targeting_extension:_targeting_parameters()
+    local max_range = class_settings.max_range
+
+    local hits, num_hits = PhysicsWorld_raycast(
+        smart_targeting_extension._physics_world, ray_origin, forward, max_range,
+        "all", "collision_filter", COLLISION_FILTER
+    )
+
+    if num_hits <= 0 then
+        return nil
+    end
+
+    for i = 1, num_hits do
+        local hit = hits[i]
+        if not hit then
+            goto continue
+        end
+
+        local hit_distance = hit[INDEX_DISTANCE]
+        if hit_distance < 0.1 then
+            goto continue
+        end
+
+        local hit_actor = hit[INDEX_ACTOR]
+        if not hit_actor then
+            goto continue
+        end
+
+        local hit_position = hit[INDEX_POSITION]
+
+        local success, hit_unit = pcall(Actor_unit, hit_actor)
+        if not success or not hit_unit or hit_unit == player_unit or not HEALTH_ALIVE[hit_unit] then
+            goto continue
+        end
+
+        local unit_data_extension = ScriptUnit_extension(hit_unit, "unit_data_system")
+        local breed_data = unit_data_extension and unit_data_extension._breed
+        if not breed_data or breed_data.smart_tag_target_type ~= "breed" then
+            goto continue
+        end
+
+        if not is_breed_valid(breed_data, class_settings) then
+            goto continue
+        end
+
+        local breed_priorities = class_settings.breed_priorities or EMPTY_TABLE
+        local priority = get_breed_priority(hit_unit, breed_data, breed_priorities, breed_data.name .. "_passive")
+        if priority <= 0 then
+            goto continue
+        end
+
+        if hit_position then
+            local hit_unit_pose, _ = Unit_box(hit_unit, true)
+            local raw_hit_unit_center_pos, _ = Actor_world_bounds(hit_actor)
+            local hit_unit_center_pos = Vector3(raw_hit_unit_center_pos.x, raw_hit_unit_center_pos.y, raw_hit_unit_center_pos.z)
+
+            local object_right = Matrix4x4_right(hit_unit_pose)
+            local object_forward = Matrix4x4_forward(hit_unit_pose)
+            local half_extent_right = breed_data.half_extent_right or 0.3
+            local half_extent_forward = breed_data.half_extent_forward or 0.3
+            local world_extents_right = object_right * half_extent_right
+            local world_extents_forward = object_forward * half_extent_forward
+            local half_width = math_max(math_abs(Vector3_dot(right, world_extents_right + world_extents_forward)), math_abs(Vector3_dot(right, world_extents_right - world_extents_forward)))
+            local half_height = Breed_height(hit_unit, breed_data) * 0.5
+
+            local hit_offset = hit_position - hit_unit_center_pos
+            local x_diff = math_abs(Vector3_dot(hit_offset, right))
+            local y_diff = math_abs(Vector3_dot(hit_offset, up))
+
+            local tight_margin = 0.4
+            if x_diff > half_width * tight_margin or y_diff > half_height * tight_margin then
+                goto continue
+            end
+        end
+
+        local hit_unit_tag = smart_tag_system:unit_tag(hit_unit)
+        if is_target_valid(tag_name, hit_unit_tag, hit_unit, nil, nil, nil) then
+            return hit_unit, hit_unit_tag
+        end
+
+        ::continue::
+    end
+
+    return nil
+end
+
 function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_context, class_settings, use_filter,
                                      is_execution_order_priority, marked_tag, t)
+    if tag_name == ENEMY_TAG_NAME then
+        return find_enemy_broadphase_target(tag_name, class_settings, tag_context, t, is_execution_order_priority, marked_tag)
+    end
+
+    if tag_name == VETERAN_TAG_NAME then
+        return find_veteran_target(tag_name, class_settings, tag_context, t, is_execution_order_priority, marked_tag)
+    end
+
     if type == "auto" and tag_name == SERVO_SKULL_TAG_NAME and mod_settings.servo_skull_line_of_sight then
         return find_servo_skull_target(tag_name, class_settings, tag_context, t, is_execution_order_priority, marked_tag)
     end

@@ -515,6 +515,11 @@ local widgets = {
                 type = "checkbox",
                 default_value = false
             },
+            {
+                setting_id    = "enemy_line_of_sight",
+                type          = "checkbox",
+                default_value = false,
+            },
             elite_widget,
             special_widget,
             boss_widget,

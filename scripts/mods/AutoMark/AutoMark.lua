@@ -542,9 +542,17 @@ local function auto_mark(dt, t, fixed_frame)
                         and mod_settings.execution_order_priority
                     
                     if is_cooldown_ready or is_priority_switch or is_execution_order_priority then
-                        -- Skip consolidated targeting for servo-skull when using line-of-sight mode
-                        if is_cooldown_ready and tag_name == TAG_NAMES.SERVO_SKULL_TAG and mod_settings.servo_skull_line_of_sight then
-                            -- Handled by single-tag path via broadphase
+                        -- Skip consolidated for tags that use their own targeting path
+                        local use_own_targeting = false
+                        if tag_name == TAG_NAMES.ENEMY_TAG then
+                            use_own_targeting = true
+                        elseif tag_name == TAG_NAMES.VETERAN_TAG then
+                            use_own_targeting = true
+                        elseif is_cooldown_ready and tag_name == TAG_NAMES.SERVO_SKULL_TAG and mod_settings.servo_skull_line_of_sight then
+                            use_own_targeting = true
+                        end
+                        if use_own_targeting then
+                            -- Handled by single-tag path via broadphase/tight raycast
                         else
                         -- Capacitance retention check for servo skull
                         local skip = false
