@@ -58,7 +58,6 @@ local Vector3_distance_squared  = Vector3.distance_squared
 local Matrix4x4_right           = Matrix4x4.right
 local Matrix4x4_forward         = Matrix4x4.forward
 
-
 -- Constants
 local INDEX_POSITION            = 1
 local INDEX_DISTANCE            = 2
@@ -490,8 +489,115 @@ function mod:is_noospheric_command_boost_breed_valid(target_unit)
     end
 end
 
+local BROADPHASE_RESULTS = {}
+
+local function find_servo_skull_target(tag_name, class_settings, tag_context, t, is_execution_order_priority, marked_tag)
+    local player = context.player
+    local player_unit = player and player.player_unit
+    if not player_unit then
+        return nil
+    end
+
+    local companion_spawner_extension = context.companion_spawner_extension
+    if not companion_spawner_extension then
+        return nil
+    end
+    local servo_skull_unit = companion_spawner_extension:spawned_unit_lookup(special_rules.cryptic_servo_skull_hack)
+    if not Unit_alive(servo_skull_unit) then
+        return nil
+    end
+    local servo_position = Unit_world_position(servo_skull_unit, 1)
+
+    local side_system = Managers.state.extension:system("side_system")
+    local side = side_system.side_by_unit[player_unit]
+    if not side then
+        return nil
+    end
+    local enemy_side_names = side:relation_side_names("enemy")
+
+    local broadphase_system = Managers.state.extension:system("broadphase_system")
+    local broadphase = broadphase_system.broadphase
+    local radius = class_settings.max_range
+    local num_results = broadphase.query(broadphase, servo_position, radius, BROADPHASE_RESULTS, enemy_side_names)
+
+    if num_results <= 0 then
+        return nil
+    end
+
+    local smart_tag_system = context.smart_tag_system
+    local breed_priorities = class_settings.breed_priorities or EMPTY_TABLE
+
+    local best_unit = nil
+    local best_unit_tag = nil
+    local best_unit_priority = -math_huge
+
+    local marked_unit = marked_tag and marked_tag._target_unit
+    if marked_unit and HEALTH_ALIVE[marked_unit] then
+        best_unit = marked_unit
+        local unit_data_extension = ScriptUnit_extension(best_unit, "unit_data_system")
+        local breed_data = unit_data_extension and unit_data_extension._breed
+        best_unit_priority = get_breed_priority(best_unit, breed_data, breed_priorities, breed_data and breed_data.name .. "_passive")
+    end
+
+    local canceled_unit = tag_context and tag_context.canceled_unit
+
+    for i = 1, num_results do
+        local hit_unit = BROADPHASE_RESULTS[i]
+        if hit_unit == marked_unit or hit_unit == canceled_unit or not HEALTH_ALIVE[hit_unit] then
+            goto next_broadphase
+        end
+
+        local unit_data_extension = ScriptUnit_extension(hit_unit, "unit_data_system")
+        local breed_data = unit_data_extension and unit_data_extension._breed
+        if not breed_data then
+            goto next_broadphase
+        end
+
+        if not is_breed_valid(breed_data, class_settings) then
+            goto next_broadphase
+        end
+
+        local priority = get_breed_priority(hit_unit, breed_data, breed_priorities, breed_data.name .. "_passive")
+        if priority <= 0 or priority <= best_unit_priority then
+            goto next_broadphase
+        end
+
+        local raw_pos = Unit_world_position(hit_unit, 1)
+        local dist_sq = Vector3_distance_squared(servo_position, raw_pos)
+        local min_dist = class_settings.min_range
+        if dist_sq < min_dist * min_dist or dist_sq > radius * radius then
+            goto next_broadphase
+        end
+
+        if not side.aggroed_minion_target_units[hit_unit] then
+            goto next_broadphase
+        end
+
+        local hit_unit_tag = smart_tag_system:unit_tag(hit_unit)
+        if not is_target_valid(tag_name, hit_unit_tag, hit_unit, nil, nil, nil) then
+            goto next_broadphase
+        end
+
+        if not mod:is_servo_skull_target_visible(hit_unit, t) then
+            goto next_broadphase
+        end
+
+        best_unit = hit_unit
+        best_unit_tag = hit_unit_tag
+        best_unit_priority = priority
+
+        ::next_broadphase::
+    end
+
+    return best_unit, best_unit_tag
+end
+
 function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_context, class_settings, use_filter,
                                      is_execution_order_priority, marked_tag, t)
+    if type == "auto" and tag_name == SERVO_SKULL_TAG_NAME and mod_settings.servo_skull_line_of_sight then
+        return find_servo_skull_target(tag_name, class_settings, tag_context, t, is_execution_order_priority, marked_tag)
+    end
+
     local player = context.player
     local player_unit = player and player.player_unit
     local smart_targeting_extension = context.smart_targeting_extension

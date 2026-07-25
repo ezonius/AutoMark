@@ -542,6 +542,10 @@ local function auto_mark(dt, t, fixed_frame)
                         and mod_settings.execution_order_priority
                     
                     if is_cooldown_ready or is_priority_switch or is_execution_order_priority then
+                        -- Skip consolidated targeting for servo-skull when using line-of-sight mode
+                        if is_cooldown_ready and tag_name == TAG_NAMES.SERVO_SKULL_TAG and mod_settings.servo_skull_line_of_sight then
+                            -- Handled by single-tag path via broadphase
+                        else
                         -- Capacitance retention check for servo skull
                         local skip = false
                         if is_cooldown_ready and tag_name == SERVO_SKULL_TAG_NAME and mod_settings.capacitance_retention and context.has_noospheric_command then
@@ -577,6 +581,7 @@ local function auto_mark(dt, t, fixed_frame)
                             has_any_active = true
                         end
                     end
+                end
                 end
             end
         end
