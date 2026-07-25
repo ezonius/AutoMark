@@ -392,12 +392,20 @@ local function auto_mark_by_tag(tag_name, t, fixed_frame, precalculated_target)
         return false
     end
 
-    -- Check manual override separately (more readable)
-    if tag_context.is_manual and not class_settings.override_manual then
-        return false
-    end
-
     local marked_tag = tag_context.tag
+
+    -- Check manual override, but allow noospheric command boost to retag manual servo-skull marks
+    if tag_context.is_manual and not class_settings.override_manual then
+        local is_noospheric_command_boost_manual = marked_tag
+            and tag_name == TAG_NAMES.SERVO_SKULL_TAG
+            and mod_settings.noospheric_command_boost
+            and context.has_noospheric_command
+            and t >= tag_context.noospheric_command_next_time
+
+        if not is_noospheric_command_boost_manual then
+            return false
+        end
+    end
     -- mark when cooldown is zero
     local is_cooldown_ready = tag_context.cooldown <= 0 and (not class_settings.mark_limit or not marked_tag)
     -- mark when priority switch is on
