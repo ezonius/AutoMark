@@ -374,6 +374,13 @@ local widgets = {
                 default_value = false,
             },
             {
+                setting_id      = "servo_skull_in_los_time",
+                type            = "numeric",
+                default_value   = 0.2,
+                range           = { 0, 2.0 },
+                decimals_number = 2,
+            },
+            {
                 setting_id    = "capacitance_retention",
                 type          = "checkbox",
                 default_value = false,

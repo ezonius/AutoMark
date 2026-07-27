@@ -108,6 +108,14 @@ local localization = {
         en = "The maximum number of line-of-sight raycasts performed per frame to find new targets. Lower values improve performance but might delay marking when many enemies are on screen.",
         ["zh-cn"] = "每帧为了寻找新目标而进行的最大视线射线检测次数。较低的值可提高性能，但当屏幕上有许多敌人时可能会延迟标记。",
     },
+    servo_skull_in_los_time = {
+        en = "Servo-Skull In-LOS Time",
+        ["zh-cn"] = "伺服头骨视线持续时间",
+    },
+    servo_skull_in_los_time_description = {
+        en = "Required continuous line-of-sight duration before triggering noospheric command boost.",
+        ["zh-cn"] = "触发星语指令增强之前所需的连续视线持续时间。",
+    },
     -- arbites settings
     adamant_settings = {
         en = "Arbites Settings",

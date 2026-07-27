@@ -111,7 +111,7 @@ local function is_disabler_target(hit_unit, tag_name, game_session, usm, player_
         return false
     end
 
-    local is_poxhound = (breed_name == "chaos_hound" or breed_name == "cultist_hound")
+    local is_poxhound = (breed_name == "chaos_hound" or breed_name == "chaos_hound_mutator" or breed_name == "chaos_armored_hound" or breed_name == "cultist_hound" or (breed_data and breed_data.game_object_type == "minion_chaos_hound"))
     local is_mutant = (breed_name == "chaos_mutant")
     local is_chaos_spawn = (breed_name == "chaos_spawn")
     local is_beast_of_nurgle = (breed_name == "chaos_beast_of_nurgle")
@@ -144,13 +144,13 @@ local function is_disabler_target(hit_unit, tag_name, game_session, usm, player_
     if is_chaos_spawn and not spawn_enabled then return false end
     if is_beast_of_nurgle and not beast_enabled then return false end
 
-    local game_object_id = usm and usm:game_object_id(hit_unit)
-    if not game_session or not game_object_id then
+    if not player_unit or not HEALTH_ALIVE[player_unit] then
         return false
     end
 
-    local target_u = MinionPerception.target_unit(game_session, game_object_id)
-    if target_u == player_unit then
+    local player_unit_data_extension = ScriptUnit_extension(player_unit, "unit_data_system")
+    local disabled_character_state_component = player_unit_data_extension and player_unit_data_extension:read_component("disabled_character_state")
+    if disabled_character_state_component and disabled_character_state_component.is_disabled and disabled_character_state_component.disabling_unit == hit_unit then
         return true
     end
 

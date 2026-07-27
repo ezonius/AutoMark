@@ -50,6 +50,7 @@ local mod_settings           = {
     servo_skull_min_range       = mod:get("servo_skull_min_range") or 0,
     servo_skull_max_range       = mod:get("servo_skull_max_range") or 30,
     servo_skull_line_of_sight    = mod:get("servo_skull_line_of_sight") or false,
+    servo_skull_in_los_time      = (mod:get("servo_skull_in_los_time") ~= nil) and mod:get("servo_skull_in_los_time") or 0.2,
     capacitance_retention           = mod:get("capacitance_retention") or false,
     capacitance_retention_elite_threshold   = mod:get("capacitance_retention_elite_threshold") or 0,
     capacitance_retention_special_threshold = mod:get("capacitance_retention_special_threshold") or 0,
@@ -181,8 +182,10 @@ mod.visibility_cache                     = visibility_cache
 mod.visibility_check_frame               = visibility_check_frame
 local servo_skull_visibility_cache       = {}
 local servo_skull_visibility_check_frame = {}
+local servo_skull_los_start_time         = {}
 mod.servo_skull_visibility_cache         = servo_skull_visibility_cache
 mod.servo_skull_visibility_check_frame   = servo_skull_visibility_check_frame
+mod.servo_skull_los_start_time           = servo_skull_los_start_time
 
 -- Unit Metadata Cache
 local unit_metadata_cache       = {}
@@ -218,6 +221,7 @@ local function reset_context()
     table_clear(visibility_check_frame)
     table_clear(servo_skull_visibility_cache)
     table_clear(servo_skull_visibility_check_frame)
+    table_clear(servo_skull_los_start_time)
     table_clear(unit_metadata_cache)
     table_clear(unit_metadata_cache_frame)
     local servo_skull_tag_context = mark_context[SERVO_SKULL_TAG_NAME]
@@ -414,6 +418,7 @@ local function auto_mark_by_tag(tag_name, t, fixed_frame, precalculated_target)
         if marked_unit then
             local is_lost = not mod:is_servo_skull_target_visible(marked_unit, t)
             if is_lost then
+                servo_skull_los_start_time[marked_unit] = nil
                 local boost_is_pending = mod_settings.noospheric_command_boost
                     and context.has_noospheric_command
                     and t < tag_context.noospheric_command_next_time
@@ -494,9 +499,28 @@ local function auto_mark_by_tag(tag_name, t, fixed_frame, precalculated_target)
 
     if not target_unit and is_noospheric_command_boost then
         local marked_unit = marked_tag and marked_tag._target_unit
-        if mod:is_target_valid(tag_name, nil, marked_unit) and mod:is_noospheric_command_boost_breed_valid(marked_unit) and mod:is_servo_skull_target_visible(marked_unit, t) then
-            mod:print_debug("Noospheric command boost")
-            target_unit = marked_unit
+        if marked_unit and mod:is_target_valid(tag_name, nil, marked_unit) and mod:is_noospheric_command_boost_breed_valid(marked_unit) then
+            if mod:is_servo_skull_target_visible(marked_unit, t) then
+                local in_los_time = mod_settings.servo_skull_in_los_time
+                if in_los_time <= 0 then
+                    mod:print_debug("Noospheric command boost")
+                    target_unit = marked_unit
+                    servo_skull_los_start_time[marked_unit] = nil
+                else
+                    local start_time = servo_skull_los_start_time[marked_unit]
+                    if not start_time then
+                        start_time = t
+                        servo_skull_los_start_time[marked_unit] = start_time
+                    end
+                    if t - start_time >= in_los_time then
+                        mod:print_debug("Noospheric command boost")
+                        target_unit = marked_unit
+                        servo_skull_los_start_time[marked_unit] = nil
+                    end
+                end
+            else
+                servo_skull_los_start_time[marked_unit] = nil
+            end
         end
     end
 
@@ -706,6 +730,7 @@ local function clean_caches(t, fixed_frame)
             local unit = _units_to_remove_vis_ss[i]
             servo_skull_visibility_cache[unit] = nil
             servo_skull_visibility_check_frame[unit] = nil
+            servo_skull_los_start_time[unit] = nil
         end
 
         for cached_unit, check_frame in next, unit_metadata_cache_frame do
