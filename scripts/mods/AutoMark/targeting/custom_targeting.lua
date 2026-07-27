@@ -99,6 +99,64 @@ function mod:destroy_visibility_raycast()
     servo_skull_visibility_raycast_object = nil
 end
 
+local function is_disabler_target(hit_unit, tag_name, game_session, usm, player_unit)
+    if tag_name ~= COMPANION_TAG_NAME and tag_name ~= SERVO_SKULL_TAG_NAME then
+        return false
+    end
+
+    local unit_data_extension = ScriptUnit_extension(hit_unit, "unit_data_system")
+    local breed_data = unit_data_extension and unit_data_extension._breed
+    local breed_name = breed_data and breed_data.name
+    if not breed_name then
+        return false
+    end
+
+    local is_poxhound = (breed_name == "chaos_hound" or breed_name == "cultist_hound")
+    local is_mutant = (breed_name == "chaos_mutant")
+    local is_chaos_spawn = (breed_name == "chaos_spawn")
+    local is_beast_of_nurgle = (breed_name == "chaos_beast_of_nurgle")
+
+    if not is_poxhound and not is_mutant and not is_chaos_spawn and not is_beast_of_nurgle then
+        return false
+    end
+
+    local assist_enabled, poxhound_enabled, mutant_enabled, spawn_enabled, beast_enabled
+    if tag_name == COMPANION_TAG_NAME then
+        assist_enabled = mod_settings.companion_disabler_assist
+        poxhound_enabled = mod_settings.companion_disabler_poxhound
+        mutant_enabled = mod_settings.companion_disabler_mutant
+        spawn_enabled = mod_settings.companion_disabler_chaos_spawn
+        beast_enabled = mod_settings.companion_disabler_beast_of_nurgle
+    elseif tag_name == SERVO_SKULL_TAG_NAME then
+        assist_enabled = mod_settings.servo_skull_disabler_assist
+        poxhound_enabled = mod_settings.servo_skull_disabler_poxhound
+        mutant_enabled = mod_settings.servo_skull_disabler_mutant
+        spawn_enabled = mod_settings.servo_skull_disabler_chaos_spawn
+        beast_enabled = mod_settings.servo_skull_disabler_beast_of_nurgle
+    end
+
+    if not assist_enabled then
+        return false
+    end
+
+    if is_poxhound and not poxhound_enabled then return false end
+    if is_mutant and not mutant_enabled then return false end
+    if is_chaos_spawn and not spawn_enabled then return false end
+    if is_beast_of_nurgle and not beast_enabled then return false end
+
+    local game_object_id = usm and usm:game_object_id(hit_unit)
+    if not game_session or not game_object_id then
+        return false
+    end
+
+    local target_u = MinionPerception.target_unit(game_session, game_object_id)
+    if target_u == player_unit then
+        return true
+    end
+
+    return false
+end
+
 local function get_breed_priority(target_unit, breed_data, breed_priorities, breed_name_passive)
     local breed_name = breed_data and breed_data.name
     if not breed_name then
@@ -564,13 +622,19 @@ local function find_servo_skull_target(tag_name, class_settings, tag_context, t,
             goto next_broadphase
         end
 
-        if not is_breed_valid(breed_data, class_settings) then
-            goto next_broadphase
-        end
+        local is_disabler = is_disabler_target(hit_unit, tag_name, game_session, usm, player_unit)
+        local priority
+        if is_disabler then
+            priority = 10000
+        else
+            if not is_breed_valid(breed_data, class_settings) then
+                goto next_broadphase
+            end
 
-        local priority = get_breed_priority(hit_unit, breed_data, breed_priorities, breed_data.name .. "_passive")
-        if priority <= 0 or priority <= base_priority then
-            goto next_broadphase
+            priority = get_breed_priority(hit_unit, breed_data, breed_priorities, breed_data.name .. "_passive")
+            if priority <= 0 or priority <= base_priority then
+                goto next_broadphase
+            end
         end
 
         local raw_pos = Unit_world_position(hit_unit, 1)
@@ -579,12 +643,14 @@ local function find_servo_skull_target(tag_name, class_settings, tag_context, t,
             goto next_broadphase
         end
 
-        local game_object_id = usm and usm:game_object_id(hit_unit)
-        if not game_session or not game_object_id then
-            goto next_broadphase
-        end
-        if not MinionPerception.target_unit(game_session, game_object_id) then
-            goto next_broadphase
+        if not is_disabler then
+            local game_object_id = usm and usm:game_object_id(hit_unit)
+            if not game_session or not game_object_id then
+                goto next_broadphase
+            end
+            if not MinionPerception.target_unit(game_session, game_object_id) then
+                goto next_broadphase
+            end
         end
 
         count = count + 1
@@ -992,26 +1058,39 @@ function mod:find_target_unit_custom(type, min_range, max_range, tag_name, tag_c
             goto continue_loop
         end
 
-        local hit_unit_priority = get_breed_priority(hit_unit, breed_data, breed_priorities, metadata.breed_name_passive)
-        -- filter unit by type and priority
-        if use_filter and (hit_unit_priority <= 0 or not is_breed_valid(breed_data, class_settings)) then
-            goto continue_loop
+        local state_mgr = Managers.state
+        local gsm = state_mgr and state_mgr.game_session
+        local usm = state_mgr and state_mgr.unit_spawner
+        local game_session = gsm and gsm:game_session()
+        local is_disabler = is_disabler_target(hit_unit, tag_name, game_session, usm, player_unit)
+
+        local hit_unit_priority
+        if is_disabler then
+            hit_unit_priority = 10000
+        else
+            hit_unit_priority = get_breed_priority(hit_unit, breed_data, breed_priorities, metadata.breed_name_passive)
+            -- filter unit by type and priority
+            if use_filter and (hit_unit_priority <= 0 or not is_breed_valid(breed_data, class_settings)) then
+                goto continue_loop
+            end
         end
 
         -- Early priority check for auto mode to skip expensive math
         if type == "auto" then
             local hit_unit_marked_by_execution_order = execution_order_units[hit_unit] ~= nil
-            if is_execution_order_priority then
-                if hit_unit_marked_by_execution_order == best_unit_marked_by_execution_order then
+            if not is_disabler then
+                if is_execution_order_priority then
+                    if hit_unit_marked_by_execution_order == best_unit_marked_by_execution_order then
+                        if hit_unit_priority <= best_unit_priority then
+                            goto continue_loop
+                        end
+                    elseif best_unit_marked_by_execution_order then
+                        goto continue_loop
+                    end
+                else
                     if hit_unit_priority <= best_unit_priority then
                         goto continue_loop
                     end
-                elseif best_unit_marked_by_execution_order then
-                    goto continue_loop
-                end
-            else
-                if hit_unit_priority <= best_unit_priority then
-                    goto continue_loop
                 end
             end
             
@@ -1304,20 +1383,33 @@ function mod:find_target_units_consolidated(active_tags, t)
                 goto next_tag
             end
 
-            local breed_priorities = p.class_settings.breed_priorities or EMPTY_TABLE
-            local hit_unit_priority = get_breed_priority(hit_unit, metadata.breed_data, breed_priorities, metadata.breed_name_passive)
-            if hit_unit_priority <= 0 or not is_breed_valid(metadata.breed_data, p.class_settings) then
-                goto next_tag
-            end
+            local state_mgr = Managers.state
+            local gsm = state_mgr and state_mgr.game_session
+            local usm = state_mgr and state_mgr.unit_spawner
+            local game_session = gsm and gsm:game_session()
+            local is_disabler = is_disabler_target(hit_unit, p.name, game_session, usm, player_unit)
 
-            if p.is_execution_order_priority then
-                if hit_unit_marked_by_execution_order == p.best_unit_marked_by_execution_order then
-                    if hit_unit_priority <= p.best_unit_priority then goto next_tag end
-                elseif p.best_unit_marked_by_execution_order then
+            local hit_unit_priority
+            if is_disabler then
+                hit_unit_priority = 10000
+            else
+                local breed_priorities = p.class_settings.breed_priorities or EMPTY_TABLE
+                hit_unit_priority = get_breed_priority(hit_unit, metadata.breed_data, breed_priorities, metadata.breed_name_passive)
+                if hit_unit_priority <= 0 or not is_breed_valid(metadata.breed_data, p.class_settings) then
                     goto next_tag
                 end
-            else
-                if hit_unit_priority <= p.best_unit_priority then goto next_tag end
+            end
+
+            if not is_disabler then
+                if p.is_execution_order_priority then
+                    if hit_unit_marked_by_execution_order == p.best_unit_marked_by_execution_order then
+                        if hit_unit_priority <= p.best_unit_priority then goto next_tag end
+                    elseif p.best_unit_marked_by_execution_order then
+                        goto next_tag
+                    end
+                else
+                    if hit_unit_priority <= p.best_unit_priority then goto next_tag end
+                end
             end
 
             if not is_target_valid(p.name, hit_unit_tag, hit_unit, hit_unit_center_pos, p.companion_unit_position, p.talent_resource_component) then

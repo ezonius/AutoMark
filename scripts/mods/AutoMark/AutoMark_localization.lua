@@ -195,6 +195,30 @@ local localization = {
             "设置为" .. highlight("0") .. "禁用。\n" ..
             "对" .. highlight("手动") .. "标记无效。",
     },
+    companion_disabler_assist = {
+        en = "Automatic Disabler Assist",
+        ["zh-cn"] = "自动解救辅助",
+    },
+    companion_disabler_assist_description = {
+        en = "Automatically mark disablers and grabbers targeting the player.",
+        ["zh-cn"] = "自动标记正在针对玩家的抓人/控人敌人。",
+    },
+    companion_disabler_poxhound = {
+        en = "Poxhound",
+        ["zh-cn"] = "poxhound",
+    },
+    companion_disabler_mutant = {
+        en = "Mutant",
+        ["zh-cn"] = "Mutant",
+    },
+    companion_disabler_chaos_spawn = {
+        en = "Chaos Spawn",
+        ["zh-cn"] = "Chaos Spawn",
+    },
+    companion_disabler_beast_of_nurgle = {
+        en = "Beast of Nurgle",
+        ["zh-cn"] = "Beast of Nurgle",
+    },
     -- cryptic settings
     cryptic_settings = {
         en = "Skitarii Settings",
@@ -234,6 +258,30 @@ local localization = {
     servo_skull_line_of_sight_description = {
         en = "Only require line of sight from the Servo-Skull to auto-tag targets, ignoring whether they are on-screen.",
         ["zh-cn"] = "自动标记时仅需从伺服颅骨的视线，无需目标在屏幕内。",
+    },
+    servo_skull_disabler_assist = {
+        en = "Automatic Disabler Assist",
+        ["zh-cn"] = "自动解救辅助",
+    },
+    servo_skull_disabler_assist_description = {
+        en = "Automatically mark disablers and grabbers targeting the player.",
+        ["zh-cn"] = "自动标记正在针对玩家的抓人/控人敌人。",
+    },
+    servo_skull_disabler_poxhound = {
+        en = "Poxhound",
+        ["zh-cn"] = "poxhound",
+    },
+    servo_skull_disabler_mutant = {
+        en = "Mutant",
+        ["zh-cn"] = "Mutant",
+    },
+    servo_skull_disabler_chaos_spawn = {
+        en = "Chaos Spawn",
+        ["zh-cn"] = "Chaos Spawn",
+    },
+    servo_skull_disabler_beast_of_nurgle = {
+        en = "Beast of Nurgle",
+        ["zh-cn"] = "Beast of Nurgle",
     },
     enemy_line_of_sight = {
         en = "Enemy Tag Line of Sight",

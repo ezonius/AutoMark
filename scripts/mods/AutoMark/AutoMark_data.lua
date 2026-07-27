@@ -315,6 +315,33 @@ local widgets = {
                     },
                 }
             },
+            {
+                setting_id    = "companion_disabler_assist",
+                type          = "checkbox",
+                default_value = false,
+                sub_widgets   = {
+                    {
+                        setting_id    = "companion_disabler_poxhound",
+                        type          = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id    = "companion_disabler_mutant",
+                        type          = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id    = "companion_disabler_chaos_spawn",
+                        type          = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id    = "companion_disabler_beast_of_nurgle",
+                        type          = "checkbox",
+                        default_value = true,
+                    },
+                }
+            },
         }
     },
     {
@@ -423,6 +450,33 @@ local widgets = {
                             { text = "blank", value = "blank" },
                             { text = "reset", value = "reset" },
                         }
+                    },
+                }
+            },
+            {
+                setting_id    = "servo_skull_disabler_assist",
+                type          = "checkbox",
+                default_value = false,
+                sub_widgets   = {
+                    {
+                        setting_id    = "servo_skull_disabler_poxhound",
+                        type          = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id    = "servo_skull_disabler_mutant",
+                        type          = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id    = "servo_skull_disabler_chaos_spawn",
+                        type          = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id    = "servo_skull_disabler_beast_of_nurgle",
+                        type          = "checkbox",
+                        default_value = true,
                     },
                 }
             },
