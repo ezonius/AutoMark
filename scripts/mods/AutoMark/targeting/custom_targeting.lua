@@ -200,6 +200,11 @@ local function is_breed_valid(breed_data, class_settings)
         return false
     end
 
+    local breed_name = breed_data.name
+    if breed_name == "chaos_mutator_ritualist" and not mod:is_ritual_active() then
+        return false
+    end
+
     local tags = breed_data.tags
     -- toggle enemy by type
     if tags.elite then
