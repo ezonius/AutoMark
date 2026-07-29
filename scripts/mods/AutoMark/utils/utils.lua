@@ -33,18 +33,49 @@ end
 
 local RITUAL_MUTATOR = "mutator_havoc_chaos_rituals"
 
+local cached_ritual_units = nil
+local last_ritual_scan_time = -1
+
+function mod:reset_ritual_cache()
+    cached_ritual_units = nil
+    last_ritual_scan_time = -1
+end
+
 local function unit_is_alive(unit)
     return unit and Unit.alive(unit)
 end
 
 function mod:find_ritual_units()
+    local now = nil
+    if Managers and Managers.time then
+        local ok, t = pcall(Managers.time.time, Managers.time, "gameplay")
+        if ok and t then
+            now = t
+        else
+            ok, t = pcall(Managers.time.time, Managers.time, "main")
+            if ok and t then
+                now = t
+            end
+        end
+    end
+    now = now or 0
+
+    local interval = mod_settings.ritual_scan_interval or 0.2
+    if cached_ritual_units and last_ritual_scan_time >= 0 and (now - last_ritual_scan_time) < interval then
+        return cached_ritual_units
+    end
+
     local side_system = Managers.state.extension and Managers.state.extension:system("side_system")
     if not side_system then
-        return {}
+        cached_ritual_units = {}
+        last_ritual_scan_time = now
+        return cached_ritual_units
     end
     local player_side = side_system:get_side_from_name("heroes")
     if not player_side then
-        return {}
+        cached_ritual_units = {}
+        last_ritual_scan_time = now
+        return cached_ritual_units
     end
 
     local enemy_units = nil
@@ -109,6 +140,8 @@ function mod:find_ritual_units()
         end
     end
 
+    cached_ritual_units = ritual_units
+    last_ritual_scan_time = now
     return ritual_units
 end
 

@@ -248,6 +248,13 @@ local widgets = {
                 decimals_number = 2,
             },
             {
+                setting_id      = "ritual_scan_interval",
+                type            = "numeric",
+                default_value   = 0.2,
+                range           = { 0, 1.0 },
+                decimals_number = 2,
+            },
+            {
                 setting_id      = "max_visibility_checks",
                 type            = "numeric",
                 default_value   = 2,

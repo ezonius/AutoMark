@@ -70,6 +70,7 @@ local mod_settings           = {
     successful_scan_interval     = mod:get("successful_scan_interval") or 0.2,
     post_mark_delay              = mod:get("post_mark_delay") or 0.5,
     noospheric_command_lead_time = mod:get("noospheric_command_lead_time") or 0.2,
+    ritual_scan_interval         = mod:get("ritual_scan_interval") or 0.2,
     max_visibility_checks        = mod:get("max_visibility_checks") or 2,
 }
 mod.settings                 = mod_settings
@@ -227,6 +228,9 @@ local function reset_context()
     local servo_skull_tag_context = mark_context[SERVO_SKULL_TAG_NAME]
     servo_skull_tag_context.noospheric_command_next_time = math.huge
     mod:reset_targeting_cache()
+    if mod.reset_ritual_cache then
+        mod:reset_ritual_cache()
+    end
 end
 
 -- Load Other Files

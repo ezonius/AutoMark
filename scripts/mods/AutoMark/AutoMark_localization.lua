@@ -100,6 +100,14 @@ local localization = {
         en = "How much time before the Noospheric Command effect expires should a re-mark be attempted.",
         ["zh-cn"] = "在星语指令效果到期前多久尝试重新标记。",
     },
+    ritual_scan_interval = {
+        en = "Ritual Scan Interval",
+        ["zh-cn"] = "仪式扫描间隔",
+    },
+    ritual_scan_interval_description = {
+        en = "The minimum time between ritual unit scans to check if ritual is active.",
+        ["zh-cn"] = "检查仪式是否激活的仪式单位扫描之间的最小时间。",
+    },
     max_visibility_checks = {
         en = "Max Visibility Checks Per Frame",
         ["zh-cn"] = "每帧最大视野检查次数",
